@@ -1,0 +1,51 @@
+c3-101:
+  - src/index.js
+c3-102:
+  - src/core/credentials.js
+c3-103:
+  - src/core/accounts.js
+c3-104:
+  - src/core/zalo-client.js
+c3-105:
+  - src/core/oa-client.js
+c3-106:
+  - src/utils/bank-helpers.js
+  - src/utils/extract-message-text.js
+  - src/utils/output.js
+  - src/utils/proxy-helpers.js
+  - src/utils/qr-display.js
+  - src/utils/qr-http-server.js
+  - src/utils/update-check.js
+c3-110:
+  - src/commands/auto-reply.js
+  - src/commands/conv.js
+  - src/commands/msg.js
+  - src/commands/poll.js
+  - src/commands/quick-msg.js
+  - src/commands/reminder.js
+c3-111:
+  - src/commands/catalog.js
+  - src/commands/friend.js
+  - src/commands/group.js
+  - src/commands/label.js
+  - src/commands/profile.js
+c3-112:
+  - src/commands/account.js
+  - src/commands/login.js
+c3-113:
+  - src/commands/listen.js
+c3-114:
+  - src/commands/oa-init.js
+  - src/commands/oa-listen.js
+  - src/commands/oa.js
+c3-115:
+  - src/commands/mcp.js
+  - src/mcp/**
+ref-credential-isolation:
+  - src/core/credentials.js
+ref-json-output-mode:
+  - src/utils/output.js
+ref-proxy-dispatch:
+  - src/utils/proxy-helpers.js
+rule-mcp-stdout-reserved:
+  - src/mcp/mcp-server.js
