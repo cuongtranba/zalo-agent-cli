@@ -14,15 +14,24 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
 
+/** Hosts that are safe to serve without an auth token */
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
 /**
  * Create HTTP MCP server with optional bearer token auth.
  * @param {Function} registerToolsFn - Registers tools on a McpServer instance
- * @param {object} deps - { api, buffer, filter, config }
+ * @param {object} deps - { getApi, buffer, filter, config, nameCache }
  * @param {number} port
- * @param {string|null} authToken - Bearer token (null = no auth)
+ * @param {string|null} authToken - Bearer token (null = no auth, loopback host only)
+ * @param {string} [host] - Bind address
  * @returns {import("http").Server}
+ * @throws {Error} When no authToken is set and host is not a loopback address
  */
 export function createHTTPServer(registerToolsFn, deps, port, authToken, host = "127.0.0.1") {
+    if (!authToken && !LOOPBACK_HOSTS.has(host)) {
+        throw new Error(`Refusing to listen on ${host} without --auth: set a bearer token or bind to 127.0.0.1`);
+    }
+
     const app = express();
     app.use(express.json());
 
@@ -44,7 +53,7 @@ export function createHTTPServer(registerToolsFn, deps, port, authToken, host = 
     app.post("/mcp", async (req, res) => {
         try {
             const server = new McpServer({ name: "zalo-agent", version: pkg.version });
-            registerToolsFn(server, deps.api, deps.buffer, deps.filter, deps.config, deps.nameCache);
+            registerToolsFn(server, deps.getApi, deps.buffer, deps.filter, deps.config, deps.nameCache);
 
             const transport = new StreamableHTTPServerTransport({
                 sessionIdGenerator: undefined, // stateless mode

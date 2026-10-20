@@ -46,9 +46,9 @@ Xây dựng trên [zca-js](https://github.com/RFS-ADRENO/zca-js).
 > **MCP Server (AI Agent Integration)** — v1.2.0 hỗ trợ Model Context Protocol cho Claude Code và các MCP client:
 > ```bash
 > zalo-agent mcp start              # stdio (local Claude Code)
-> zalo-agent mcp start --http 3847 --auth your-secret  # HTTP (VPS)
+> zalo-agent mcp start --http 3847 --auth your-secret  # HTTP at http://host:3847/mcp (VPS, agents)
 > ```
-> 4 tools: get_messages · send_message · list_threads · mark_read
+> 12 tools: read · history · send (reply, mention) · send_attachment · react · list/search threads · list_conversations · group members · user info · mark_read · view_media
 > Auto-reconnect · thread filter · noise reduction · group notifications
 > Xem [MCP Guide](skill/references/mcp-guide.md)
 
@@ -176,9 +176,9 @@ CLI tool for Zalo automation — multi-account, proxy support, bank transfers, Q
 > **MCP Server (AI Agent Integration)** — v1.2.0 adds Model Context Protocol support for Claude Code and MCP clients:
 > ```bash
 > zalo-agent mcp start              # stdio (local Claude Code)
-> zalo-agent mcp start --http 3847 --auth your-secret  # HTTP (VPS)
+> zalo-agent mcp start --http 3847 --auth your-secret  # HTTP at http://host:3847/mcp (VPS, agents)
 > ```
-> 4 tools: get_messages · send_message · list_threads · mark_read
+> 12 tools: read · history · send (reply, mention) · send_attachment · react · list/search threads · list_conversations · group members · user info · mark_read · view_media
 > Auto-reconnect · thread filter · noise reduction · group notifications
 > See [MCP Guide](skill/references/mcp-guide.md)
 
