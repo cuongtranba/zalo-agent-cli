@@ -9,45 +9,16 @@ import { getApi, autoLogin, clearSession } from "../core/zalo-client.js";
 import { MessageBuffer } from "../mcp/message-buffer.js";
 import { ThreadFilter } from "../mcp/thread-filter.js";
 import { loadMCPConfig, parseDuration } from "../mcp/mcp-config.js";
-import { extractMessageText } from "../utils/extract-message-text.js";
 import { createMCPServer } from "../mcp/mcp-server.js";
 import { registerTools } from "../mcp/mcp-tools.js";
 import { createHTTPServer } from "../mcp/mcp-http-transport.js";
 import { ZaloNotifier } from "../mcp/notifier.js";
+import { normalizeMessage } from "../mcp/normalize-message.js";
 import { ThreadNameCache } from "../mcp/thread-name-cache.js";
 import { autoDownloadMedia, isDownloadableMedia } from "../mcp/media-downloader.js";
 
 /** Zalo close code for duplicate web session — fatal, do not retry */
 const CLOSE_DUPLICATE = 3000;
-
-/**
- * Normalize a raw zca-js message event into the buffer's message shape.
- * @param {object} msg - Raw zca-js message event
- * @returns {object} Normalized message
- */
-function normalizeMessage(msg) {
-    const rawContent = msg.data.content;
-    const isText = typeof rawContent === "string";
-    return {
-        id: msg.data.msgId,
-        threadId: msg.threadId,
-        threadType: msg.type === 0 ? "dm" : "group",
-        senderId: msg.data.uidFrom || null,
-        senderName: msg.data.dName || null,
-        text: isText ? rawContent : extractMessageText(rawContent, msg.data.msgType),
-        timestamp: Date.now(),
-        type: isText ? "text" : msg.data.msgType || "attachment",
-        attachment:
-            !isText && rawContent
-                ? {
-                      type: msg.data.msgType,
-                      url: rawContent.href || null,
-                      description: rawContent.title || null,
-                  }
-                : null,
-        replyTo: null,
-    };
-}
 
 export function registerMCPCommands(program) {
     const mcp = program.command("mcp").description("MCP server for AI agent integration");
@@ -59,9 +30,10 @@ export function registerMCPCommands(program) {
         .option("--auth <token>", "Bearer token for HTTP auth (only with --http)")
         .option("--host <address>", "HTTP bind address (default: 127.0.0.1, only with --http)")
         .action(async (opts) => {
-            // Perform login explicitly here — preAction hook skips "mcp"
+            // Perform login explicitly here — preAction hook skips "mcp".
+            // jsonMode=true keeps the "Auto-login" info line off stdout (the stdio MCP channel).
             try {
-                await autoLogin(false);
+                await autoLogin(true);
             } catch (e) {
                 console.error("[mcp] Auto-login failed:", e.message);
                 process.exit(1);
@@ -94,12 +66,12 @@ export function registerMCPCommands(program) {
                         console.error(`[mcp] Invalid port: ${opts.http}. Must be 1-65535.`);
                         process.exit(1);
                     }
-                    const deps = { api: getApi(), buffer, filter, config, nameCache };
+                    const deps = { getApi, buffer, filter, config, nameCache };
                     const authToken = opts.auth?.trim() || null;
                     httpServer = createHTTPServer(registerTools, deps, port, authToken, opts.host || "127.0.0.1");
                     console.error(`[mcp] HTTP server started on port ${port}`);
                 } else {
-                    await createMCPServer(getApi(), buffer, filter, config, nameCache);
+                    await createMCPServer(getApi, buffer, filter, config, nameCache);
                 }
             } catch (e) {
                 console.error("[mcp] Failed to start MCP server:", e.message);
@@ -107,7 +79,7 @@ export function registerMCPCommands(program) {
             }
 
             // Setup notifier (sends to Zalo group when agent is offline)
-            const notifier = new ZaloNotifier(getApi(), config);
+            const notifier = new ZaloNotifier(getApi, config);
 
             let reconnectCount = 0;
             let shuttingDown = false;
@@ -169,7 +141,7 @@ export function registerMCPCommands(program) {
                     await new Promise((r) => setTimeout(r, 5000));
                     try {
                         clearSession();
-                        await autoLogin(false);
+                        await autoLogin(true);
                         console.error("[mcp] Re-login successful. Restarting listener...");
                         const newApi = getApi();
                         attachListenerHandlers(newApi);
@@ -179,7 +151,7 @@ export function registerMCPCommands(program) {
                         await new Promise((r) => setTimeout(r, 30000));
                         try {
                             clearSession();
-                            await autoLogin(false);
+                            await autoLogin(true);
                             const retryApi = getApi();
                             attachListenerHandlers(retryApi);
                             retryApi.listener.start({ retryOnClose: true });

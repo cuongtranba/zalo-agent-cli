@@ -16,20 +16,20 @@ const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8
 /**
  * Create and start MCP server with stdio transport.
  * All logs MUST use console.error() — stdout is reserved for MCP protocol.
- * @param {object} api - zca-js API instance
+ * @param {() => object} getApi - Returns the current zca-js API instance
  * @param {import("./message-buffer.js").MessageBuffer} buffer
  * @param {import("./thread-filter.js").ThreadFilter} filter
  * @param {object} config - MCP config
  * @param {import("./thread-name-cache.js").ThreadNameCache} [nameCache] - Thread name cache
  * @returns {Promise<McpServer>}
  */
-export async function createMCPServer(api, buffer, filter, config, nameCache) {
+export async function createMCPServer(getApi, buffer, filter, config, nameCache) {
     const server = new McpServer({
         name: "zalo-agent",
         version: pkg.version,
     });
 
-    registerTools(server, api, buffer, filter, config, nameCache);
+    registerTools(server, getApi, buffer, filter, config, nameCache);
 
     const transport = new StdioServerTransport();
     await server.connect(transport);

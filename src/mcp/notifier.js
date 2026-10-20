@@ -31,15 +31,15 @@ const TYPE_LABEL = {
 
 export class ZaloNotifier {
     /**
-     * @param {object} api - zca-js API instance
+     * @param {() => object} getApi - Returns the current zca-js API instance (changes after re-login)
      * @param {object} config - Full MCP config (uses config.notify section)
      * @param {boolean} config.notify.enabled
      * @param {string|null} config.notify.thread - Group ID to send notifications to
      * @param {string[]} config.notify.on - Event types to notify on (e.g. ["dm"])
      * @param {string} config.notify.cooldown - Debounce window (e.g. "5m")
      */
-    constructor(api, config) {
-        this._api = api;
+    constructor(getApi, config) {
+        this._getApi = getApi;
         this._enabled = config.notify?.enabled || false;
         this._notifyThread = config.notify?.thread || null;
         this._onTypes = new Set(config.notify?.on || ["dm"]);
@@ -101,7 +101,7 @@ export class ZaloNotifier {
 
         try {
             // threadType 1 = Group conversation
-            await this._api.sendMessage(text, this._notifyThread, 1);
+            await this._getApi().sendMessage(text, this._notifyThread, 1);
         } catch (err) {
             console.error("Notifier send failed:", err.message);
         }

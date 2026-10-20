@@ -51,19 +51,19 @@ function wait(ms) {
 describe("ZaloNotifier constructor", () => {
     it("is disabled by default when config.notify.enabled=false", () => {
         const { api } = makeSpy();
-        const n = new ZaloNotifier(api, disabledConfig());
+        const n = new ZaloNotifier(() => api, disabledConfig());
         assert.equal(n._enabled, false);
     });
 
     it("is enabled when config.notify.enabled=true", () => {
         const { api } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         assert.equal(n._enabled, true);
     });
 
     it("stores notify thread and onTypes from config", () => {
         const { api } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig({ thread: "grp_99", on: ["dm", "group"] }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ thread: "grp_99", on: ["dm", "group"] }));
         assert.equal(n._notifyThread, "grp_99");
         assert.ok(n._onTypes.has("dm"));
         assert.ok(n._onTypes.has("group"));
@@ -71,7 +71,7 @@ describe("ZaloNotifier constructor", () => {
 
     it("agentConnected starts as false", () => {
         const { api } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         assert.equal(n._agentConnected, false);
     });
 });
@@ -79,7 +79,7 @@ describe("ZaloNotifier constructor", () => {
 describe("ZaloNotifier onMessage - disabled", () => {
     it("does not queue messages when disabled", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, disabledConfig());
+        const n = new ZaloNotifier(() => api, disabledConfig());
         n.onMessage(dmMsg());
         await wait(30);
         assert.equal(calls.length, 0);
@@ -91,7 +91,7 @@ describe("ZaloNotifier onMessage - disabled", () => {
 describe("ZaloNotifier onMessage - agent connected", () => {
     it("does not notify when agent is connected", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.setAgentConnected(true);
         n.onMessage(dmMsg());
         await wait(30);
@@ -101,7 +101,7 @@ describe("ZaloNotifier onMessage - agent connected", () => {
 
     it("notifies again after agent disconnects", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.setAgentConnected(true);
         n.onMessage(dmMsg("ignored"));
         n.setAgentConnected(false);
@@ -115,7 +115,7 @@ describe("ZaloNotifier onMessage - agent connected", () => {
 describe("ZaloNotifier onMessage - type filtering", () => {
     it("queues messages matching onTypes (dm)", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig({ on: ["dm"] }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ on: ["dm"] }));
         n.onMessage(dmMsg("queued"));
         await wait(30);
         assert.equal(calls.length, 1);
@@ -123,7 +123,7 @@ describe("ZaloNotifier onMessage - type filtering", () => {
 
     it("ignores messages not matching onTypes", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig({ on: ["dm"] }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ on: ["dm"] }));
         n.onMessage({ threadType: "group", senderId: "u1", senderName: "Bob", text: "hi" });
         await wait(30);
         assert.equal(calls.length, 0);
@@ -131,7 +131,7 @@ describe("ZaloNotifier onMessage - type filtering", () => {
 
     it("notifies for group type when configured", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig({ on: ["group"] }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ on: ["group"] }));
         n.onMessage({ threadType: "group", senderId: "u1", senderName: "Bob", text: "hi" });
         await wait(30);
         assert.equal(calls.length, 1);
@@ -141,7 +141,7 @@ describe("ZaloNotifier onMessage - type filtering", () => {
 describe("ZaloNotifier _flush notification format", () => {
     it("sends to the configured notify thread", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig({ thread: "grp_notify" }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ thread: "grp_notify" }));
         n.onMessage(dmMsg("test message"));
         await wait(30);
         assert.equal(calls[0].thread, "grp_notify");
@@ -150,7 +150,7 @@ describe("ZaloNotifier _flush notification format", () => {
 
     it("notification text includes sender name and message preview", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.onMessage(dmMsg("hello world", { senderName: "Alice" }));
         await wait(30);
         assert.ok(calls[0].text.includes("Alice"));
@@ -159,7 +159,7 @@ describe("ZaloNotifier _flush notification format", () => {
 
     it("shows up to 3 message previews in a single flush", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.onMessage(dmMsg("msg1", { senderName: "A" }));
         n.onMessage(dmMsg("msg2", { senderName: "B" }));
         n.onMessage(dmMsg("msg3", { senderName: "C" }));
@@ -173,7 +173,7 @@ describe("ZaloNotifier _flush notification format", () => {
 
     it("includes overflow count when more than 3 messages", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         for (let i = 1; i <= 5; i++) {
             n.onMessage(dmMsg(`msg${i}`, { senderName: `User${i}` }));
         }
@@ -185,7 +185,7 @@ describe("ZaloNotifier _flush notification format", () => {
 
     it("sends total message count in notification text", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.onMessage(dmMsg("one"));
         n.onMessage(dmMsg("two"));
         await wait(30);
@@ -194,7 +194,7 @@ describe("ZaloNotifier _flush notification format", () => {
 
     it("shows type breakdown with mixed media types", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.onMessage(dmMsg("hello", { type: "text" }));
         n.onMessage(dmMsg("[image]", { type: "image" }));
         n.onMessage(dmMsg("[voice]", { type: "voice" }));
@@ -206,7 +206,7 @@ describe("ZaloNotifier _flush notification format", () => {
 
     it("uses emoji prefix for audio and video types", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.onMessage(dmMsg("[audio]", { type: "audio", senderName: "Bob" }));
         n.onMessage(dmMsg("[video]", { type: "video", senderName: "Eve" }));
         await wait(30);
@@ -216,7 +216,7 @@ describe("ZaloNotifier _flush notification format", () => {
 
     it("uses microphone emoji for voice messages", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.onMessage(dmMsg("[voice]", { type: "voice" }));
         await wait(30);
         assert.ok(calls[0].text.includes("🎤"));
@@ -226,7 +226,7 @@ describe("ZaloNotifier _flush notification format", () => {
 describe("ZaloNotifier cooldown batching", () => {
     it("batches multiple messages within cooldown into a single send", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig({ cooldown: "20ms" }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ cooldown: "20ms" }));
         n.onMessage(dmMsg("first"));
         n.onMessage(dmMsg("second"));
         n.onMessage(dmMsg("third"));
@@ -236,7 +236,7 @@ describe("ZaloNotifier cooldown batching", () => {
 
     it("clears pending after flush so next batch is independent", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig({ cooldown: "20ms" }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ cooldown: "20ms" }));
         n.onMessage(dmMsg("batch1"));
         await wait(40); // first flush
 
@@ -251,7 +251,7 @@ describe("ZaloNotifier destroy", () => {
     it("flushes pending messages on destroy", async () => {
         const { api, calls } = makeSpy();
         // Long cooldown so timer wouldn't fire naturally
-        const n = new ZaloNotifier(api, enabledConfig({ cooldown: "60000ms" }));
+        const n = new ZaloNotifier(() => api, enabledConfig({ cooldown: "60000ms" }));
         n.onMessage(dmMsg("urgent"));
         n.destroy(); // should flush immediately
         // _flush is async, give it a tick
@@ -261,7 +261,7 @@ describe("ZaloNotifier destroy", () => {
 
     it("destroy with no pending messages does not send", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(api, enabledConfig());
+        const n = new ZaloNotifier(() => api, enabledConfig());
         n.destroy(); // nothing pending, no timer
         await wait(10);
         assert.equal(calls.length, 0);

@@ -127,17 +127,25 @@ Full reference: `references/oa-command-reference.md`
 ### MCP Server (Model Context Protocol)
 ```bash
 zalo-agent mcp start                                # stdio transport (default, for local Claude Code)
-zalo-agent mcp start --http <port>                  # HTTP transport (for VPS/remote clients)
-zalo-agent mcp start --auth <token>                 # Bearer token auth (HTTP mode)
+zalo-agent mcp start --http <port> --auth <token>   # HTTP transport at http://host:port/mcp (Bearer token)
+zalo-agent mcp start --http <port> --host 0.0.0.0   # Bind all interfaces (requires --auth)
 zalo-agent mcp start --config <path>                # Custom config file
 ```
-MCP tools exposed:
+MCP tools exposed (12):
 - `zalo_get_messages` — Get buffered messages with cursor-based pagination (incremental reads)
-- `zalo_send_message` — Send text message to a thread (DM or group)
-- `zalo_list_threads` — List active threads with unread counts and metadata
+- `zalo_get_history` — Fetch older messages from the Zalo server (~2 weeks)
+- `zalo_send_message` — Send text to a thread; optional `replyToMessageId` (quote) and `mentions`
+- `zalo_send_attachment` — Send files/images from server paths or http(s) URLs (max 25 MB each)
+- `zalo_react` — React to a message (heart, like, haha, wow, cry, angry)
+- `zalo_list_threads` — List buffered threads with unread counts and metadata
+- `zalo_search_threads` — Fuzzy search threads by name
+- `zalo_list_conversations` — List the account's recent DMs and groups
+- `zalo_get_group_members` — List group members with admin/creator flags
+- `zalo_get_user_info` — Look up a user's display name and avatar
 - `zalo_mark_read` — Discard messages up to a given cursor
+- `zalo_view_media` — Open a message's image/audio/video
 
-Use stdio mode for local Claude Code, HTTP mode for VPS deployments.
+Use stdio mode for local Claude Code, HTTP mode for agents and VPS deployments. Reply/react only work for messages received while the server runs.
 Full reference: `references/mcp-guide.md`
 
 ### Other: profile, conv, poll, reminder, auto-reply, label, catalog, logout

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- MCP tools: `zalo_send_attachment` (server paths or http(s) URLs, 25 MB cap), `zalo_react`, `zalo_list_conversations`, `zalo_get_group_members`, `zalo_get_user_info`.
+- `zalo_send_message` accepts `replyToMessageId` (quote a buffered message) and `mentions`.
+- Buffered MCP messages expose `cliMsgId`, `ts`, and `replyTo` (filled from the quoted message).
+- MCP guide: "Tích hợp vào agent qua HTTP" section, full tool reference for all 12 tools, corrected config keys and `/mcp` URL.
+- Tests for MCP tools and the HTTP transport.
+
+### Fixed
+
+- MCP tools, HTTP transport and notifier used the Zalo session captured at startup, so every call failed after an automatic re-login. They now resolve the current session per call.
+- `mcp start` no longer prints the auto-login line or the update notice to stdout (the stdio protocol channel).
+
+### Security
+
+- HTTP MCP refuses to start on a non-loopback `--host` without `--auth`.
+
 ## [1.6.1] - 2026-03-27
 
 ### Security

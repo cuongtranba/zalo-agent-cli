@@ -58,8 +58,8 @@ program
         if (!skipAutoLogin) {
             await autoLogin(program.opts().json);
         }
-        // Non-blocking update check (skip for update command itself)
-        if (cmdName !== "update") {
+        // Non-blocking update check (skip for update command itself and mcp, whose stdout is the protocol channel)
+        if (cmdName !== "update" && cmdName !== "mcp") {
             checkForUpdates(pkg.version, program.opts().json);
         }
     });
