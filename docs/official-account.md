@@ -172,7 +172,7 @@ ngrok http 3000
 
 ```bash
 # Install trên VPS
-npm install -g zalo-agent-cli
+bun add -g zalo-agent-cli
 
 # Login từ VPS
 zalo-agent oa login --app-id <ID> --secret <KEY> --callback-host https://your-vps.com
@@ -180,8 +180,8 @@ zalo-agent oa login --app-id <ID> --secret <KEY> --callback-host https://your-vp
 # Run listener
 zalo-agent oa listen -p 3000 -s <SECRET>
 
-# Dùng systemd/pm2 để keep alive
-pm2 start "zalo-agent oa listen -p 3000 -s <SECRET>" --name zalo-oa
+# Dùng systemd/pm2 để keep alive (pm2 chạy bằng Bun)
+pm2 start zalo-agent --interpreter bun --name zalo-oa -- oa listen -p 3000 -s <SECRET>
 ```
 
 ---

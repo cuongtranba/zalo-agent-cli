@@ -65,7 +65,7 @@ zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # mở ra mạng
 ### Chạy nền bằng pm2
 
 ```bash
-pm2 start zalo-agent --name zalo-mcp --stop-exit-codes 78 -- mcp start --http 3847 --auth <token>
+pm2 start zalo-agent --interpreter bun --name zalo-mcp --stop-exit-codes 78 -- mcp start --http 3847 --auth <token>
 ```
 
 - Mã thoát `78` nghĩa là session Zalo đã hết hạn hoặc không có: server in một dòng lỗi rồi dừng hẳn thay vì khởi động lại liên tục.

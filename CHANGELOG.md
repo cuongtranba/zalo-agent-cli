@@ -4,8 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### BREAKING
+
+- Bun-only runtime: the CLI now runs on [Bun](https://bun.sh) >= 1.4.2 and Node.js is no longer supported. Install with `bun add -g zalo-agent-cli`; `npm install -g` still installs the package, but the `zalo-agent` command needs `bun` on `PATH`. Process managers must run it with Bun (for pm2: `--interpreter bun`; keep `--stop-exit-codes 78` for `mcp start`).
+- The package now ships TypeScript sources (`src/**/*.ts`, `bin` points at `src/index.ts`) instead of JavaScript.
+
 ### Added
 
+- Standalone release binaries (no runtime needed) for linux-x64, linux-arm64, darwin-x64, darwin-arm64 and windows-x64, attached to every GitHub release with `SHA256SUMS`.
+- `bun run check` runs typecheck, lint, format check and tests in sequence.
 - Push notifications through the standard MCP resource subscription: subscribe to `zalo://inbox` and receive `notifications/resources/updated` when a message is buffered (stdio and HTTP). Notifications are best-effort; cursor polling stays the source of truth.
 - MCP tools: `zalo_send_attachment` (server paths or http(s) URLs, 25 MB cap), `zalo_react`, `zalo_list_conversations`, `zalo_get_group_members`, `zalo_get_user_info`.
 - `zalo_send_message` accepts `replyToMessageId` (quote a buffered message) and `mentions`.
@@ -15,10 +22,16 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Linting moved from ESLint to oxlint with a stricter ruleset (no explicit `any`, no non-null assertions, described `@ts-expect-error`, consistent type imports).
+- CI runs on Bun for Ubuntu and macOS, including a compiled-binary smoke test; releases are published to npm with provenance by `release.yml`.
+- The npm tarball no longer includes test files.
 - HTTP MCP transport is now session-based (`mcp-session-id`, `GET /mcp` SSE stream) instead of stateless, which is required for server-to-client notifications. Standard MCP clients handle this automatically.
 
 ### Fixed
 
+- `oa login` crashed with a `ReferenceError` when the login timed out, because `warning()` was used without being imported.
+- `profile full-avatar` always printed `?`: it read `avatar` from the response, but the field is `full_avatar`.
+- `msg history` could not stop the listener when a fetch failed: the error handler referenced a variable scoped to the `try` block, and the resulting error was swallowed.
 - Idle HTTP MCP sessions now expire (`limits.sessionIdleTimeout`, default 30m) instead of accumulating forever when a client disappears without closing its session. `/health` reports the open `sessions` count.
 - The Zalo-group notifier now actually suppresses notifications while an MCP client is subscribed to `zalo://inbox` (previously it never knew about connected agents and always sent).
 - The notifier no longer drops messages that arrive while a notification is being sent; they go out in the next batch.
