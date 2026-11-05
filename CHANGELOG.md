@@ -6,11 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Push notifications through the standard MCP resource subscription: subscribe to `zalo://inbox` and receive `notifications/resources/updated` when a message is buffered (stdio and HTTP). Notifications are best-effort; cursor polling stays the source of truth.
 - MCP tools: `zalo_send_attachment` (server paths or http(s) URLs, 25 MB cap), `zalo_react`, `zalo_list_conversations`, `zalo_get_group_members`, `zalo_get_user_info`.
 - `zalo_send_message` accepts `replyToMessageId` (quote a buffered message) and `mentions`.
 - Buffered MCP messages expose `cliMsgId`, `ts`, and `replyTo` (filled from the quoted message).
 - MCP guide: "Tích hợp vào agent qua HTTP" section, full tool reference for all 12 tools, corrected config keys and `/mcp` URL.
 - Tests for MCP tools and the HTTP transport.
+
+### Changed
+
+- HTTP MCP transport is now session-based (`mcp-session-id`, `GET /mcp` SSE stream) instead of stateless, which is required for server-to-client notifications. Standard MCP clients handle this automatically.
 
 ### Fixed
 

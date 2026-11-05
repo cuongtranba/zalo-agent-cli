@@ -50,6 +50,7 @@ Xây dựng trên [zca-js](https://github.com/RFS-ADRENO/zca-js).
 > ```
 > 12 tools: read · history · send (reply, mention) · send_attachment · react · list/search threads · list_conversations · group members · user info · mark_read · view_media
 > Auto-reconnect · thread filter · noise reduction · group notifications
+> Push: đăng ký (subscribe) resource `zalo://inbox` để nhận `notifications/resources/updated` khi có tin mới (best-effort, vẫn nên polling bằng cursor)
 > Xem [MCP Guide](skill/references/mcp-guide.md)
 
 ---
@@ -180,6 +181,7 @@ CLI tool for Zalo automation — multi-account, proxy support, bank transfers, Q
 > ```
 > 12 tools: read · history · send (reply, mention) · send_attachment · react · list/search threads · list_conversations · group members · user info · mark_read · view_media
 > Auto-reconnect · thread filter · noise reduction · group notifications
+> Push: subscribe to the `zalo://inbox` resource to get `notifications/resources/updated` on new messages (best-effort; keep cursor polling)
 > See [MCP Guide](skill/references/mcp-guide.md)
 
 ### Quick Start

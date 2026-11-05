@@ -14,6 +14,18 @@ export class MessageBuffer {
         this._maxSize = maxSize;
         this._maxAge = maxAge;
         this._globalCursor = 0;
+        /** @type {Set<(threadId: string, message: object) => void>} */
+        this._pushListeners = new Set();
+    }
+
+    /**
+     * Observe pushes. Listeners run after the message is stored; a throwing listener never breaks push().
+     * @param {(threadId: string, message: object) => void} listener
+     * @returns {() => void} Unsubscribe function
+     */
+    onPush(listener) {
+        this._pushListeners.add(listener);
+        return () => this._pushListeners.delete(listener);
     }
 
     /**
@@ -31,6 +43,13 @@ export class MessageBuffer {
         thread.messages.push(message);
         thread.lastActivity = Date.now();
         this._evict(threadId);
+        for (const listener of this._pushListeners) {
+            try {
+                listener(threadId, message);
+            } catch (e) {
+                console.error("[message-buffer] push listener failed:", e.message);
+            }
+        }
     }
 
     /**

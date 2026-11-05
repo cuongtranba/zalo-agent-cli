@@ -10,7 +10,7 @@ import { MessageBuffer } from "../mcp/message-buffer.js";
 import { ThreadFilter } from "../mcp/thread-filter.js";
 import { loadMCPConfig, parseDuration } from "../mcp/mcp-config.js";
 import { createMCPServer } from "../mcp/mcp-server.js";
-import { registerTools } from "../mcp/mcp-tools.js";
+import { registerZaloServer } from "../mcp/mcp-setup.js";
 import { createHTTPServer } from "../mcp/mcp-http-transport.js";
 import { ZaloNotifier } from "../mcp/notifier.js";
 import { normalizeMessage } from "../mcp/normalize-message.js";
@@ -85,7 +85,7 @@ export function registerMCPCommands(program) {
                     }
                     const deps = { getApi, buffer, filter, config, nameCache };
                     const authToken = opts.auth?.trim() || null;
-                    httpServer = createHTTPServer(registerTools, deps, port, authToken, opts.host || "127.0.0.1");
+                    httpServer = createHTTPServer(registerZaloServer, deps, port, authToken, opts.host || "127.0.0.1");
                     console.error(`[mcp] HTTP server started on port ${port}`);
                 } else {
                     await createMCPServer(getApi, buffer, filter, config, nameCache);

@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { createHTTPServer } from "./mcp-http-transport.js";
-import { registerTools } from "./mcp-tools.js";
+import { registerZaloServer } from "./mcp-setup.js";
 import { MessageBuffer } from "./message-buffer.js";
 
 const TOKEN = "secret-token";
@@ -28,7 +29,7 @@ const deps = { getApi: () => ({}), buffer: new MessageBuffer(), filter: {}, conf
 
 /** Start the HTTP server on an ephemeral loopback port and return it with its MCP URL */
 async function startServer(authToken) {
-    const server = createHTTPServer(registerTools, deps, 0, authToken);
+    const server = createHTTPServer(registerZaloServer, deps, 0, authToken);
     await once(server, "listening");
     return { server, url: `http://127.0.0.1:${server.address().port}/mcp` };
 }
@@ -58,5 +59,38 @@ test("HTTP MCP rejects requests without the bearer token and serves all tools wi
 });
 
 test("createHTTPServer refuses a non-loopback host without an auth token", () => {
-    assert.throws(() => createHTTPServer(registerTools, deps, 0, null, "0.0.0.0"));
+    assert.throws(() => createHTTPServer(registerZaloServer, deps, 0, null, "0.0.0.0"));
 });
+
+test(
+    "HTTP MCP session pushes resource updates to a subscribed client over the GET stream",
+    { timeout: 5000 },
+    async () => {
+        const { server, url } = await startServer(TOKEN);
+        const client = new Client({ name: "test-client", version: "0.0.0" });
+        try {
+            let updatedUri = null;
+            client.setNotificationHandler(ResourceUpdatedNotificationSchema, (n) => {
+                updatedUri = n.params.uri;
+            });
+            await client.connect(
+                new StreamableHTTPClientTransport(new URL(url), {
+                    requestInit: { headers: { Authorization: `Bearer ${TOKEN}` } },
+                }),
+            );
+            await client.subscribeResource({ uri: "zalo://inbox" });
+
+            // The client opens its GET stream asynchronously after initialize and notifications sent before it
+            // is open are dropped, so keep pushing across request round-trips until one gets through.
+            while (!updatedUri) {
+                deps.buffer.push("g1", { id: "m1", threadId: "g1", threadType: "group", content: "hi", timestamp: 1 });
+                await client.ping();
+            }
+
+            assert.equal(updatedUri, "zalo://inbox");
+        } finally {
+            await client.close();
+            server.close();
+        }
+    },
+);

@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerTools } from "./mcp-tools.js";
+import { registerZaloServer } from "./mcp-setup.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
@@ -29,7 +29,7 @@ export async function createMCPServer(getApi, buffer, filter, config, nameCache)
         version: pkg.version,
     });
 
-    registerTools(server, getApi, buffer, filter, config, nameCache);
+    registerZaloServer(server, getApi, buffer, filter, config, nameCache);
 
     const transport = new StdioServerTransport();
     await server.connect(transport);

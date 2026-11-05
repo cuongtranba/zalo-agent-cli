@@ -1,15 +1,18 @@
 /**
  * Express server wrapping MCP StreamableHTTP transport with bearer token auth.
- * Uses stateless mode — each POST /mcp request creates a fresh server+transport.
+ * Stateful sessions: an initialize POST creates a server+transport pair keyed by mcp-session-id; later
+ * POST/GET/DELETE /mcp requests carrying that id are routed to it. The GET stream carries server-initiated
+ * notifications such as resources/updated for zalo://inbox.
  */
 
 import express from "express";
-import { timingSafeEqual } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
@@ -19,7 +22,7 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 /**
  * Create HTTP MCP server with optional bearer token auth.
- * @param {Function} registerToolsFn - Registers tools on a McpServer instance
+ * @param {Function} registerServerFn - Registers tools and resources on a McpServer instance
  * @param {object} deps - { getApi, buffer, filter, config, nameCache }
  * @param {number} port
  * @param {string|null} authToken - Bearer token (null = no auth, loopback host only)
@@ -27,7 +30,7 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
  * @returns {import("http").Server}
  * @throws {Error} When no authToken is set and host is not a loopback address
  */
-export function createHTTPServer(registerToolsFn, deps, port, authToken, host = "127.0.0.1") {
+export function createHTTPServer(registerServerFn, deps, port, authToken, host = "127.0.0.1") {
     if (!authToken && !LOOPBACK_HOSTS.has(host)) {
         throw new Error(`Refusing to listen on ${host} without --auth: set a bearer token or bind to 127.0.0.1`);
     }
@@ -49,32 +52,53 @@ export function createHTTPServer(registerToolsFn, deps, port, authToken, host = 
         });
     }
 
-    // MCP endpoint — stateless, fresh server+transport per request
-    app.post("/mcp", async (req, res) => {
+    /** @type {Map<string, { transport: StreamableHTTPServerTransport, server: McpServer }>} */
+    const sessions = new Map();
+
+    const jsonRpcError = (res, status, code, message) =>
+        res.status(status).json({ jsonrpc: "2.0", error: { code, message }, id: null });
+
+    /** Create a server+transport pair for a new session; registered in `sessions` once initialized */
+    const createSession = async () => {
+        const server = new McpServer({ name: "zalo-agent", version: pkg.version });
+        registerServerFn(server, deps.getApi, deps.buffer, deps.filter, deps.config, deps.nameCache);
+
+        const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: () => randomUUID(),
+            onsessioninitialized: (sessionId) => sessions.set(sessionId, { transport, server }),
+        });
+        transport.onclose = () => {
+            if (transport.sessionId) sessions.delete(transport.sessionId);
+            server.close().catch(() => {});
+        };
+
+        await server.connect(transport);
+        return transport;
+    };
+
+    // MCP endpoint — POST carries requests, GET opens the notification stream, DELETE ends the session
+    app.all("/mcp", async (req, res) => {
         try {
-            const server = new McpServer({ name: "zalo-agent", version: pkg.version });
-            registerToolsFn(server, deps.getApi, deps.buffer, deps.filter, deps.config, deps.nameCache);
+            if (!["POST", "GET", "DELETE"].includes(req.method)) {
+                res.set("Allow", "POST, GET, DELETE");
+                return jsonRpcError(res, 405, -32000, "Method not allowed");
+            }
 
-            const transport = new StreamableHTTPServerTransport({
-                sessionIdGenerator: undefined, // stateless mode
-            });
+            const sessionId = req.headers["mcp-session-id"];
+            if (sessionId) {
+                const session = sessions.get(sessionId);
+                if (!session) return jsonRpcError(res, 404, -32001, "Session not found");
+                return await session.transport.handleRequest(req, res, req.body);
+            }
 
-            res.on("close", () => {
-                transport.close();
-                server.close();
-            });
-
-            await server.connect(transport);
+            if (req.method !== "POST" || !isInitializeRequest(req.body)) {
+                return jsonRpcError(res, 400, -32000, "Bad Request: no valid session ID provided");
+            }
+            const transport = await createSession();
             await transport.handleRequest(req, res, req.body);
         } catch (err) {
             console.error("MCP HTTP error:", err);
-            if (!res.headersSent) {
-                res.status(500).json({
-                    jsonrpc: "2.0",
-                    error: { code: -32603, message: "Internal server error" },
-                    id: null,
-                });
-            }
+            if (!res.headersSent) jsonRpcError(res, 500, -32603, "Internal server error");
         }
     });
 
