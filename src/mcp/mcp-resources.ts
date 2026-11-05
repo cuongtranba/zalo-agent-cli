@@ -10,6 +10,10 @@ import {
     SubscribeRequestSchema,
     UnsubscribeRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { MessageBuffer } from "./message-buffer.ts";
+import type { MCPServerConfig } from "./mcp-config.ts";
+import type { ThreadNameCache } from "./thread-name-cache.ts";
 import { readBufferedMessages } from "./mcp-tools.ts";
 
 export const INBOX_URI = "zalo://inbox";
@@ -19,18 +23,18 @@ export const INBOX_URI = "zalo://inbox";
  * parts (the Zalo-group notifier) can tell whether an agent will already receive a push.
  */
 export class InboxSubscribers {
-    #sessions = new Set();
+    #sessions = new Set<symbol | string>();
 
     /** Idempotent: a session counts once however often it subscribes */
-    add(sessionKey) {
+    add(sessionKey: symbol | string): void {
         this.#sessions.add(sessionKey);
     }
 
-    remove(sessionKey) {
+    remove(sessionKey: symbol | string): void {
         this.#sessions.delete(sessionKey);
     }
 
-    count() {
+    count(): number {
         return this.#sessions.size;
     }
 }
@@ -38,13 +42,15 @@ export class InboxSubscribers {
 /**
  * Register the inbox resource and its subscribe handlers on one server instance (= one client session).
  * Must run before the server connects to a transport.
- * @param {import("@modelcontextprotocol/sdk/server/mcp.js").McpServer} server
- * @param {import("./message-buffer.ts").MessageBuffer} buffer
- * @param {object} config - MCP config
- * @param {import("./thread-name-cache.ts").ThreadNameCache} [nameCache]
- * @param {InboxSubscribers} [inboxSubscribers] - Updated as this session subscribes, unsubscribes or closes
+ * @param inboxSubscribers - Updated as this session subscribes, unsubscribes or closes
  */
-export function registerInboxResource(server, buffer, config, nameCache, inboxSubscribers = new InboxSubscribers()) {
+export function registerInboxResource(
+    server: McpServer,
+    buffer: MessageBuffer,
+    config: MCPServerConfig,
+    nameCache?: ThreadNameCache,
+    inboxSubscribers: InboxSubscribers = new InboxSubscribers(),
+): void {
     const maxPerPoll = config.limits?.maxMessagesPerPoll ?? 20;
 
     server.registerResource(
@@ -72,7 +78,7 @@ export function registerInboxResource(server, buffer, config, nameCache, inboxSu
 
     server.server.registerCapabilities({ resources: { subscribe: true } });
 
-    const subscribed = new Set();
+    const subscribed = new Set<string>();
     const sessionKey = Symbol("inbox-session");
     server.server.setRequestHandler(SubscribeRequestSchema, async ({ params }) => {
         if (params.uri !== INBOX_URI) {
@@ -91,7 +97,7 @@ export function registerInboxResource(server, buffer, config, nameCache, inboxSu
     const stopListening = buffer.onPush(() => {
         if (!subscribed.has(INBOX_URI)) return;
         // Fire and forget: a dead client must never affect the Zalo listener
-        server.server.sendResourceUpdated({ uri: INBOX_URI }).catch((e) => {
+        server.server.sendResourceUpdated({ uri: INBOX_URI }).catch((e: Error) => {
             console.error("[mcp-resources] Failed to send inbox update:", e.message);
         });
     });

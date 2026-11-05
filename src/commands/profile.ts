@@ -2,12 +2,22 @@
  * Profile commands — view/update profile, avatar, bio, and privacy settings.
  */
 
+import type { Command } from "commander";
 import { resolve } from "path";
+import type { UpdateProfilePayload, UpdateSettingsType, UserSetting } from "zca-js";
 import { getApi } from "../core/zalo-client.ts";
 import { success, error, info, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
 /** Valid privacy setting keys and their human-readable labels + value descriptions. */
-const SETTING_MAP = {
+interface SettingMeta {
+    /** Field of the settings response; its string value is also the UpdateSettingsType accepted by the update call */
+    key: keyof UserSetting;
+    label: string;
+    values: Record<number, string>;
+}
+
+const SETTING_MAP: Record<string, SettingMeta> = {
     "online-status": {
         key: "show_online_status",
         label: "Show online status",
@@ -55,7 +65,7 @@ const SETTING_MAP = {
     },
 };
 
-export function registerProfileCommands(program) {
+export function registerProfileCommands(program: Command): void {
     const profile = program.command("profile").description("View and update your Zalo profile and settings");
 
     profile
@@ -75,27 +85,27 @@ export function registerProfileCommands(program) {
                     info(`Avatar: ${p.avatar || "?"}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     profile
         .command("avatar <imagePath>")
         .description("Change your profile avatar")
-        .action(async (imagePath) => {
+        .action(async (imagePath: string) => {
             try {
                 const absPath = resolve(imagePath);
                 const result = await getApi().changeAccountAvatar(absPath);
                 output(result, program.opts().json, () => success("Avatar updated"));
             } catch (e) {
-                error(`Avatar update failed: ${e.message}`);
+                error(`Avatar update failed: ${errorMessage(e)}`);
             }
         });
 
     profile
         .command("bio [text]")
         .description("View or update your profile bio/status")
-        .action(async (text) => {
+        .action(async (text: string | undefined) => {
             try {
                 if (text === undefined) {
                     const result = await getApi().fetchAccountInfo();
@@ -118,7 +128,7 @@ export function registerProfileCommands(program) {
                     }
                 }
             } catch (e) {
-                error(`Bio update failed: ${e.message}`);
+                error(`Bio update failed: ${errorMessage(e)}`);
             }
         });
 
@@ -128,7 +138,7 @@ export function registerProfileCommands(program) {
         .option("-n, --name <name>", "Display name")
         .option("-d, --dob <YYYY-MM-DD>", "Date of birth")
         .option("-g, --gender <0|1>", "Gender: 0=Male, 1=Female")
-        .action(async (opts) => {
+        .action(async (opts: { name?: string; dob?: string; gender?: boolean }) => {
             try {
                 if (!opts.name && !opts.dob && !opts.gender) {
                     error("Provide at least one: --name, --dob, or --gender");
@@ -143,17 +153,18 @@ export function registerProfileCommands(program) {
                     const parts = p.sdob.split("/");
                     if (parts.length === 3) currentDob = `${parts[2]}-${parts[1]}-${parts[0]}`;
                 }
-                const payload = {
+                const payload: UpdateProfilePayload = {
                     profile: {
                         name: opts.name || p.displayName || p.zaloName,
-                        dob: opts.dob || currentDob,
+                        // Format is documented in the --dob help and not validated here
+                        dob: (opts.dob || currentDob) as UpdateProfilePayload["profile"]["dob"],
                         gender: opts.gender !== undefined ? Number(opts.gender) : (p.gender ?? 0),
                     },
                 };
                 const result = await getApi().updateProfile(payload);
                 output(result, program.opts().json, () => success("Profile updated"));
             } catch (e) {
-                error(`Profile update failed: ${e.message}`);
+                error(`Profile update failed: ${errorMessage(e)}`);
             }
         });
 
@@ -169,7 +180,7 @@ export function registerProfileCommands(program) {
                     for (const [slug, meta] of Object.entries(SETTING_MAP)) {
                         const raw = result[meta.key];
                         // Normalize booleans to 0/1 (API returns bool for some settings)
-                        const val = raw === true ? 1 : raw === false ? 0 : raw;
+                        const val: number = raw === true ? 1 : raw === false ? 0 : raw;
                         const label = meta.values[val] || String(val);
                         console.log(`  ${meta.label.padEnd(30)} ${label}  (${slug}=${val})`);
                     }
@@ -178,7 +189,7 @@ export function registerProfileCommands(program) {
                     info("Example: zalo-agent profile set online-status 0");
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -187,69 +198,69 @@ export function registerProfileCommands(program) {
         .description("List your avatar gallery")
         .option("-c, --count <n>", "Page size", parseInt, 50)
         .option("-p, --page <n>", "Page number", parseInt, 1)
-        .action(async (opts) => {
+        .action(async (opts: { count: number; page: number }) => {
             try {
                 const result = await getApi().getAvatarList(opts.count, opts.page);
                 output(result, program.opts().json);
             } catch (e) {
-                error(`Get avatars failed: ${e.message}`);
+                error(`Get avatars failed: ${errorMessage(e)}`);
             }
         });
 
     profile
         .command("full-avatar <friendId>")
         .description("Get full-size avatar URL for a user")
-        .action(async (friendId) => {
+        .action(async (friendId: string) => {
             try {
                 const result = await getApi().getFullAvatar(friendId);
                 output(result, program.opts().json, () => {
-                    info(`Avatar: ${result?.avatar || "?"}`);
+                    info(`Avatar: ${result?.full_avatar || "?"}`);
                 });
             } catch (e) {
-                error(`Get full avatar failed: ${e.message}`);
+                error(`Get full avatar failed: ${errorMessage(e)}`);
             }
         });
 
     profile
         .command("avatar-url <friendIds...>")
         .description("Get avatar URLs for one or more users")
-        .action(async (friendIds) => {
+        .action(async (friendIds: string[]) => {
             try {
                 const result = await getApi().getAvatarUrlProfile(friendIds);
                 output(result, program.opts().json);
             } catch (e) {
-                error(`Get avatar URLs failed: ${e.message}`);
+                error(`Get avatar URLs failed: ${errorMessage(e)}`);
             }
         });
 
     profile
         .command("delete-avatar <photoIds...>")
         .description("Delete avatar(s) from your gallery")
-        .action(async (photoIds) => {
+        .action(async (photoIds: string[]) => {
             try {
                 const result = await getApi().deleteAvatar(photoIds);
                 output(result, program.opts().json, () => success(`Deleted ${photoIds.length} avatar(s)`));
             } catch (e) {
-                error(`Delete avatar failed: ${e.message}`);
+                error(`Delete avatar failed: ${errorMessage(e)}`);
             }
         });
 
     profile
         .command("reuse-avatar <photoId>")
         .description("Reuse a previous avatar from your gallery")
-        .action(async (photoId) => {
+        .action(async (photoId: string) => {
             try {
                 const result = await getApi().reuseAvatar(photoId);
                 output(result, program.opts().json, () => success("Avatar reused"));
             } catch (e) {
-                error(`Reuse avatar failed: ${e.message}`);
+                error(`Reuse avatar failed: ${errorMessage(e)}`);
             }
         });
 
     profile
         .command("set <setting> <value>")
         .description("Update a privacy setting (use 'profile settings' to see options)")
-        .action(async (setting, value) => {
+        .action(async (setting: string, value: string) => {
             try {
                 const meta = SETTING_MAP[setting];
                 if (!meta) {
@@ -265,10 +276,10 @@ export function registerProfileCommands(program) {
                     );
                     return;
                 }
-                const result = await getApi().updateSettings(meta.key, numVal);
+                const result = await getApi().updateSettings(meta.key as UpdateSettingsType, numVal);
                 output(result, program.opts().json, () => success(`${meta.label}: ${meta.values[numVal]} (${numVal})`));
             } catch (e) {
-                error(`Setting update failed: ${e.message}`);
+                error(`Setting update failed: ${errorMessage(e)}`);
             }
         });
 }

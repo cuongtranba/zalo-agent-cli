@@ -5,21 +5,27 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerZaloServer } from "./mcp-setup.ts";
+import type { API } from "zca-js";
+import type { MessageBuffer } from "./message-buffer.ts";
+import type { MCPServerConfig } from "./mcp-config.ts";
+import type { ThreadFilter } from "./thread-filter.ts";
+import type { ThreadNameCache } from "./thread-name-cache.ts";
+import { registerZaloServer, type ZaloServerOptions } from "./mcp-setup.ts";
 import pkg from "../../package.json" with { type: "json" };
 
 /**
  * Create and start MCP server with stdio transport.
  * All logs MUST use console.error() — stdout is reserved for MCP protocol.
- * @param {() => object} getApi - Returns the current zca-js API instance
- * @param {import("./message-buffer.ts").MessageBuffer} buffer
- * @param {import("./thread-filter.ts").ThreadFilter} filter
- * @param {object} config - MCP config
- * @param {import("./thread-name-cache.ts").ThreadNameCache} [nameCache] - Thread name cache
- * @param {{ inboxSubscribers?: import("./mcp-resources.ts").InboxSubscribers }} [options]
- * @returns {Promise<McpServer>}
+ * @param getApi - Returns the current zca-js API instance
  */
-export async function createMCPServer(getApi, buffer, filter, config, nameCache, options = {}) {
+export async function createMCPServer(
+    getApi: () => API,
+    buffer: MessageBuffer,
+    filter: ThreadFilter,
+    config: MCPServerConfig,
+    nameCache?: ThreadNameCache,
+    options: ZaloServerOptions = {},
+): Promise<McpServer> {
     const server = new McpServer({
         name: "zalo-agent",
         version: pkg.version,

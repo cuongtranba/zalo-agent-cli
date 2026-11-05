@@ -2,16 +2,32 @@
  * Friend commands — list, find, info, add, accept, remove, block, unblock, last-online, online.
  */
 
+import type { Command } from "commander";
 import { getApi } from "../core/zalo-client.ts";
 import { success, error, info, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
+
+/**
+ * A user record as Zalo returns it. Field naming differs per endpoint (camelCase or snake_case) and the
+ * response is sometimes wrapped in `data`, so the formatters probe all variants.
+ */
+interface UserLike {
+    uid?: string;
+    userId?: string;
+    displayName?: string;
+    zaloName?: string;
+    display_name?: string;
+    zalo_name?: string;
+    data?: UserLike;
+}
 
 /** Extract numeric error code from zca-js error message string. */
-function extractErrorCode(msg) {
+function extractErrorCode(msg: unknown): number | null {
     const match = String(msg).match(/\((\-?\d+)\)/);
     return match ? Number(match[1]) : null;
 }
 
-export function registerFriendCommands(program) {
+export function registerFriendCommands(program: Command): void {
     const friend = program.command("friend").description("Manage friends and contacts");
 
     friend
@@ -21,15 +37,16 @@ export function registerFriendCommands(program) {
             try {
                 const result = await getApi().getAllFriends();
                 output(result, program.opts().json, () => {
-                    const profiles = result?.changed_profiles || result || {};
-                    const entries = Object.entries(profiles);
+                    const profiles: object =
+                        (result as { changed_profiles?: object })?.changed_profiles || result || {};
+                    const entries = Object.entries(profiles) as [string, UserLike][];
                     info(`${entries.length} friends`);
                     for (const [uid, p] of entries) {
                         console.log(`  ${uid}  ${p.displayName || p.zaloName || "?"}`);
                     }
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -41,14 +58,14 @@ export function registerFriendCommands(program) {
                 const result = await getApi().getFriendOnlines();
                 output(result, program.opts().json);
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     friend
         .command("search <name>")
         .description("Search friends by name (returns thread_id for messaging)")
-        .action(async (name) => {
+        .action(async (name: string) => {
             try {
                 const result = await getApi().getAllFriends();
                 const friends = Array.isArray(result) ? result : [];
@@ -74,16 +91,16 @@ export function registerFriendCommands(program) {
                     info('Example: zalo-agent msg send <thread_id> "Hello"');
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     friend
         .command("find <query>")
         .description("Find user by phone number or Zalo ID")
-        .action(async (query) => {
+        .action(async (query: string) => {
             try {
-                const result = await getApi().findUser(query);
+                const result: UserLike = await getApi().findUser(query);
                 if (!result || (!result.uid && !result?.data?.uid)) {
                     error(
                         `No Zalo user found for "${query}". User may not exist, has disabled phone search, or phone is not registered on Zalo.`,
@@ -96,14 +113,14 @@ export function registerFriendCommands(program) {
                     info(`Name: ${u.displayName || u.zaloName || u.display_name || u.zalo_name || "?"}`);
                 });
             } catch (e) {
-                error(`Find user failed: ${e.message}`);
+                error(`Find user failed: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("info <userId>")
         .description("Get user profile information")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().getUserInfo(userId);
                 output(result, program.opts().json, () => {
@@ -114,7 +131,7 @@ export function registerFriendCommands(program) {
                     info(`Avatar: ${p.avatar || "?"}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -122,90 +139,91 @@ export function registerFriendCommands(program) {
         .command("add <userId>")
         .description("Send a friend request")
         .option("-m, --msg <text>", "Message to include", "")
-        .action(async (userId, opts) => {
+        .action(async (userId: string, opts: { msg: string }) => {
             try {
                 // zca-js API signature: sendFriendRequest(msg, userId)
                 const result = await getApi().sendFriendRequest(opts.msg, userId);
                 output(result, program.opts().json, () => success(`Friend request sent to ${userId}`));
             } catch (e) {
                 // Map Zalo error codes to actionable messages
-                const code = e.code || extractErrorCode(e.message);
-                const errMap = {
+                const code = (e as { code?: number }).code || extractErrorCode(errorMessage(e));
+                const errMap: Record<string, string> = {
                     225: `Already friends with ${userId}. Use "friend list" to verify.`,
                     215: `User ${userId} may have blocked you or is unreachable.`,
                     222: `User ${userId} already sent you a friend request. Use "friend accept ${userId}" instead.`,
                     "-1": `Invalid userId "${userId}". Use "friend find <phone>" to get the correct userId first.`,
                 };
-                error(errMap[code] || `Friend request failed (code ${code}): ${e.message}`);
+                error(errMap[String(code)] || `Friend request failed (code ${code}): ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("accept <userId>")
         .description("Accept a friend request")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().acceptFriendRequest(userId);
                 output(result, program.opts().json, () => success(`Accepted friend request from ${userId}`));
             } catch (e) {
-                error(`Accept friend request failed for ${userId}: ${e.message}`);
+                error(`Accept friend request failed for ${userId}: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("remove <userId>")
         .description("Remove a friend")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().removeFriend(userId);
                 output(result, program.opts().json, () => success(`Removed friend ${userId}`));
             } catch (e) {
-                error(`Remove friend failed for ${userId}: ${e.message}`);
+                error(`Remove friend failed for ${userId}: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("block <userId>")
         .description("Block a user")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().blockUser(userId);
                 output(result, program.opts().json, () => success(`Blocked user ${userId}`));
             } catch (e) {
-                error(`Block user failed for ${userId}: ${e.message}`);
+                error(`Block user failed for ${userId}: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("unblock <userId>")
         .description("Unblock a user")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().unblockUser(userId);
                 output(result, program.opts().json, () => success(`Unblocked user ${userId}`));
             } catch (e) {
-                error(`Unblock user failed for ${userId}: ${e.message}`);
+                error(`Unblock user failed for ${userId}: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("last-online <userId>")
         .description("Check when user was last online")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
+                // @ts-expect-error pre-existing: zca-js has no getLastOnline (it is lastOnline); the command fails at runtime
                 const result = await getApi().getLastOnline(userId);
                 output(result, program.opts().json);
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     friend
         .command("find-username <username>")
         .description("Find a user by their Zalo username")
-        .action(async (username) => {
+        .action(async (username: string) => {
             try {
-                const result = await getApi().findUserByUsername(username);
+                const result: UserLike | null = await getApi().findUserByUsername(username);
                 output(result, program.opts().json, () => {
                     if (!result) {
                         error(`No user found for username "${username}"`);
@@ -215,19 +233,19 @@ export function registerFriendCommands(program) {
                     info(`Name: ${result.displayName || result.zaloName || "?"}`);
                 });
             } catch (e) {
-                error(`Find username failed: ${e.message}`);
+                error(`Find username failed: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("alias <friendId> <alias>")
         .description("Set a nickname (alias) for a friend")
-        .action(async (friendId, alias) => {
+        .action(async (friendId: string, alias: string) => {
             try {
                 const result = await getApi().changeFriendAlias(alias, friendId);
                 output(result, program.opts().json, () => success(`Alias set to "${alias}" for ${friendId}`));
             } catch (e) {
-                error(`Set alias failed: ${e.message}`);
+                error(`Set alias failed: ${errorMessage(e)}`);
             }
         });
 
@@ -236,7 +254,7 @@ export function registerFriendCommands(program) {
         .description("List all friend aliases")
         .option("-c, --count <n>", "Page size", parseInt, 100)
         .option("-p, --page <n>", "Page number", parseInt, 1)
-        .action(async (opts) => {
+        .action(async (opts: { count: number; page: number }) => {
             try {
                 const result = await getApi().getAliasList(opts.count, opts.page);
                 output(result, program.opts().json, () => {
@@ -247,43 +265,43 @@ export function registerFriendCommands(program) {
                     }
                 });
             } catch (e) {
-                error(`Get alias list failed: ${e.message}`);
+                error(`Get alias list failed: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("alias-remove <friendId>")
         .description("Remove a friend's alias")
-        .action(async (friendId) => {
+        .action(async (friendId: string) => {
             try {
                 const result = await getApi().removeFriendAlias(friendId);
                 output(result, program.opts().json, () => success(`Alias removed for ${friendId}`));
             } catch (e) {
-                error(`Remove alias failed: ${e.message}`);
+                error(`Remove alias failed: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("reject <userId>")
         .description("Reject a friend request")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().rejectFriendRequest(userId);
                 output(result, program.opts().json, () => success(`Rejected friend request from ${userId}`));
             } catch (e) {
-                error(`Reject friend request failed: ${e.message}`);
+                error(`Reject friend request failed: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("undo-request <userId>")
         .description("Cancel a sent friend request")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().undoFriendRequest(userId);
                 output(result, program.opts().json, () => success(`Friend request to ${userId} cancelled`));
             } catch (e) {
-                error(`Undo friend request failed: ${e.message}`);
+                error(`Undo friend request failed: ${errorMessage(e)}`);
             }
         });
 
@@ -302,10 +320,10 @@ export function registerFriendCommands(program) {
                 });
             } catch (e) {
                 // Code 112 = no friend requests
-                if (String(e.message).includes("112")) {
+                if (String(errorMessage(e)).includes("112")) {
                     info("No sent friend requests");
                 } else {
-                    error(`Get sent requests failed: ${e.message}`);
+                    error(`Get sent requests failed: ${errorMessage(e)}`);
                 }
             }
         });
@@ -313,7 +331,7 @@ export function registerFriendCommands(program) {
     friend
         .command("request-status <userId>")
         .description("Check friend request status with a user")
-        .action(async (userId) => {
+        .action(async (userId: string) => {
             try {
                 const result = await getApi().getFriendRequestStatus(userId);
                 output(result, program.opts().json, () => {
@@ -322,7 +340,7 @@ export function registerFriendCommands(program) {
                     info(`is_requesting: ${result.is_requesting}`);
                 });
             } catch (e) {
-                error(`Get request status failed: ${e.message}`);
+                error(`Get request status failed: ${errorMessage(e)}`);
             }
         });
 
@@ -333,14 +351,14 @@ export function registerFriendCommands(program) {
             try {
                 const result = await getApi().getCloseFriends();
                 output(result, program.opts().json, () => {
-                    const friends = Array.isArray(result) ? result : [];
+                    const friends: UserLike[] = Array.isArray(result) ? result : [];
                     info(`${friends.length} close friend(s)`);
                     for (const f of friends) {
                         console.log(`  ${f.userId || f.uid || "?"}  ${f.displayName || f.zaloName || "?"}`);
                     }
                 });
             } catch (e) {
-                error(`Get close friends failed: ${e.message}`);
+                error(`Get close friends failed: ${errorMessage(e)}`);
             }
         });
 
@@ -360,25 +378,25 @@ export function registerFriendCommands(program) {
                     }
                 });
             } catch (e) {
-                error(`Get recommendations failed: ${e.message}`);
+                error(`Get recommendations failed: ${errorMessage(e)}`);
             }
         });
 
     friend
         .command("find-phones <phones...>")
         .description("Find users by phone numbers")
-        .action(async (phones) => {
+        .action(async (phones: string[]) => {
             try {
                 const result = await getApi().getMultiUsersByPhones(phones);
                 output(result, program.opts().json, () => {
-                    const entries = Object.entries(result || {});
+                    const entries = Object.entries(result || {}) as [string, UserLike][];
                     info(`${entries.length} user(s) found`);
                     for (const [phone, user] of entries) {
                         console.log(`  ${phone}  ${user.uid || "?"}  ${user.displayName || user.zaloName || "?"}`);
                     }
                 });
             } catch (e) {
-                error(`Find by phone failed: ${e.message}`);
+                error(`Find by phone failed: ${errorMessage(e)}`);
             }
         });
 }

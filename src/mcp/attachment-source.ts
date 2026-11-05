@@ -14,7 +14,7 @@ export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 30000;
 
 /** Extension fallback when the URL path has none, keyed by content-type */
-const EXT_BY_CONTENT_TYPE = {
+const EXT_BY_CONTENT_TYPE: Record<string, string> = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
     "image/gif": ".gif",
@@ -29,7 +29,7 @@ const EXT_BY_CONTENT_TYPE = {
  * Create a temp dir for downloaded attachments. Caller must rm it when done.
  * @returns {Promise<string>}
  */
-export function createAttachmentDir() {
+export function createAttachmentDir(): Promise<string> {
     return mkdtemp(join(tmpdir(), "zalo-attach-"));
 }
 
@@ -38,9 +38,9 @@ export function createAttachmentDir() {
  * @param {string} source - Absolute path on the server host
  * @returns {Promise<string>} The same path when it is an existing regular file
  */
-async function resolveLocalFile(source) {
+async function resolveLocalFile(source: string): Promise<string> {
     if (!isAbsolute(source)) throw new Error(`Attachment path must be absolute: ${source}`);
-    let info;
+    let info: Awaited<ReturnType<typeof stat>>;
     try {
         info = await stat(source);
     } catch {
@@ -57,7 +57,7 @@ async function resolveLocalFile(source) {
  * @param {number} index - Position in the sources list, keeps names unique
  * @returns {string}
  */
-function safeFilename(url, contentType, index) {
+function safeFilename(url: URL, contentType: string, index: number): string {
     let name = "";
     try {
         name = basename(decodeURIComponent(url.pathname));
@@ -81,7 +81,7 @@ function safeFilename(url, contentType, index) {
  * @param {number} index
  * @returns {Promise<string>} Path of the downloaded file
  */
-async function downloadUrl(source, dir, index) {
+async function downloadUrl(source: string, dir: string, index: number): Promise<string> {
     const url = new URL(source);
     const res = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
     if (!res.ok) throw new Error(`Download failed (${res.status}) for ${source}`);
@@ -90,9 +90,10 @@ async function downloadUrl(source, dir, index) {
     if (declared > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large (>25 MB): ${source}`);
 
     // Count bytes while streaming so a response without content-length cannot exhaust memory
-    const chunks = [];
+    const chunks: Uint8Array[] = [];
     let size = 0;
-    for await (const chunk of res.body) {
+    // res.body is non-null for a successful response
+    for await (const chunk of res.body!) {
         size += chunk.length;
         if (size > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large (>25 MB): ${source}`);
         chunks.push(chunk);
@@ -110,9 +111,9 @@ async function downloadUrl(source, dir, index) {
  * @param {string} dir - Temp dir for downloads (from createAttachmentDir)
  * @returns {Promise<string[]>}
  */
-export async function resolveAttachmentSources(sources, dir) {
+export async function resolveAttachmentSources(sources: string[], dir: string): Promise<string[]> {
     // Sequential so a failure never leaves in-flight writes racing the caller's temp dir cleanup
-    const paths = [];
+    const paths: string[] = [];
     for (const [index, source] of sources.entries()) {
         paths.push(
             /^https?:\/\//i.test(source) ? await downloadUrl(source, dir, index) : await resolveLocalFile(source),

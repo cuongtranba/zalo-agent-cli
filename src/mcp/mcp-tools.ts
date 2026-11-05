@@ -7,22 +7,30 @@
 
 import { rm } from "fs/promises";
 import { z } from "zod";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { Reactions, type API, type MessageContent, type Message } from "zca-js";
 import { downloadMedia, openFile } from "./media-downloader.ts";
 import { createAttachmentDir, resolveAttachmentSources } from "./attachment-source.ts";
 import { QUOTE_SOURCE } from "./normalize-message.ts";
+import type { MessageBuffer, BufferedMessage } from "./message-buffer.ts";
+import type { MCPServerConfig } from "./mcp-config.ts";
+import type { ThreadFilter } from "./thread-filter.ts";
+import type { ThreadNameCache } from "./thread-name-cache.ts";
 import { extractMessageText } from "../utils/extract-message-text.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
 /** Thread type constants matching zca-js ThreadType enum */
 const THREAD_USER = 0;
 
 /** Reaction names exposed to agents, mapped to zca-js Reactions codes */
 const REACTION_CODES = {
-    heart: "/-heart",
-    like: "/-strong",
-    haha: ":>",
-    wow: ":o",
-    cry: ":-((",
-    angry: ":-h",
+    heart: Reactions.HEART,
+    like: Reactions.LIKE,
+    haha: Reactions.HAHA,
+    wow: Reactions.WOW,
+    cry: Reactions.CRY,
+    angry: Reactions.ANGRY,
 };
 
 /** Max ids per getGroupInfo / getGroupMembersInfo request */
@@ -30,43 +38,48 @@ const BATCH_SIZE = 50;
 
 /**
  * Wrap a result object into MCP tool content format.
- * @param {object} result
- * @returns {{ content: Array }}
  */
-function ok(result) {
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
+function ok(result: unknown): CallToolResult {
+    return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
 }
 
 /**
  * Wrap an error message into MCP tool error content format.
- * @param {string} message
- * @returns {{ content: Array, isError: true }}
  */
-function err(message) {
-    return { content: [{ type: "text", text: `Error: ${message}` }], isError: true };
+function err(message: string): CallToolResult {
+    return { content: [{ type: "text" as const, text: `Error: ${message}` }], isError: true };
 }
 
 /**
  * Split a list into fixed-size batches.
- * @param {Array} list
- * @param {number} size
- * @returns {Array[]}
  */
-function toBatches(list, size) {
-    const batches = [];
+function toBatches<T>(list: T[], size: number): T[][] {
+    const batches: T[][] = [];
     for (let i = 0; i < list.length; i += size) batches.push(list.slice(i, i + size));
     return batches;
+}
+
+/** One message returned by zalo_get_history. */
+interface HistoryMessage {
+    msgId: string | undefined;
+    threadId: string;
+    senderId: string | null;
+    senderName: string | null;
+    text: string;
+    timestamp: number | null;
+    type: string;
+    threadName?: string;
 }
 
 /**
  * Read buffered messages and enrich them with thread names.
  * Shared by the zalo_get_messages tool and the zalo://inbox resource so both return the same shape.
- * @param {import("./message-buffer.ts").MessageBuffer} buffer
- * @param {import("./thread-name-cache.ts").ThreadNameCache} [nameCache]
- * @param {{ threadId?: string, since?: number, limit: number }} query
- * @returns {{ messages: Array, cursor: number, hasMore: boolean }}
  */
-export function readBufferedMessages(buffer, nameCache, { threadId, since = 0, limit }) {
+export function readBufferedMessages(
+    buffer: MessageBuffer,
+    nameCache: ThreadNameCache | undefined,
+    { threadId, since = 0, limit }: { threadId?: string; since?: number; limit: number },
+): { messages: BufferedMessage[]; cursor: number; hasMore: boolean } {
     const result = buffer.read(threadId, since, limit);
     if (nameCache) {
         for (const msg of result.messages) {
@@ -79,18 +92,20 @@ export function readBufferedMessages(buffer, nameCache, { threadId, since = 0, l
 
 /**
  * Register all Zalo MCP tools on the server.
- * @param {import("@modelcontextprotocol/sdk/server/mcp.js").McpServer} server
- * @param {() => object} getApi - Returns the current zca-js API instance (changes after re-login, so call per request)
- * @param {import("./message-buffer.ts").MessageBuffer} buffer
- * @param {import("./thread-filter.ts").ThreadFilter} filter
- * @param {object} config - MCP config
- * @param {import("./thread-name-cache.ts").ThreadNameCache} [nameCache] - Thread name cache
+ * @param getApi - Returns the current zca-js API instance (changes after re-login, so call per request)
  */
-export function registerTools(server, getApi, buffer, filter, config, nameCache) {
+export function registerTools(
+    server: McpServer,
+    getApi: () => API,
+    buffer: MessageBuffer,
+    _filter: ThreadFilter,
+    config: MCPServerConfig,
+    nameCache?: ThreadNameCache,
+): void {
     const maxPerPoll = config.limits?.maxMessagesPerPoll ?? 20;
 
     /** Find a buffered message by id, optionally scoped to one thread */
-    const findBuffered = (messageId, threadId) =>
+    const findBuffered = (messageId: string, threadId?: string) =>
         buffer.read(threadId, 0, Number.MAX_SAFE_INTEGER).messages.find((m) => m.id === messageId);
 
     // --- zalo_get_messages ---
@@ -110,8 +125,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
             try {
                 return ok(readBufferedMessages(buffer, nameCache, { threadId, since, limit }));
             } catch (e) {
-                console.error("[mcp-tools] zalo_get_messages error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_get_messages error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -152,9 +167,10 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
         },
         async ({ threadId, text, threadType, replyToMessageId, mentions }) => {
             try {
-                let content = text;
+                let content: string | MessageContent = text;
                 if (replyToMessageId || mentions?.length) {
-                    content = { msg: text };
+                    const rich: MessageContent = { msg: text };
+                    content = rich;
                     if (replyToMessageId) {
                         const quote = findBuffered(replyToMessageId, threadId)?.[QUOTE_SOURCE];
                         if (!quote) {
@@ -162,18 +178,18 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                                 `Message ${replyToMessageId} not found in buffer — can only reply to messages received while the server is running`,
                             );
                         }
-                        content.quote = quote;
+                        rich.quote = quote;
                     }
                     if (mentions?.length) {
-                        content.mentions = mentions.map((m) => ({ pos: m.pos, uid: m.userId, len: m.len }));
+                        rich.mentions = mentions.map((m) => ({ pos: m.pos, uid: m.userId, len: m.len }));
                     }
                 }
                 const result = await getApi().sendMessage(content, threadId, Number(threadType));
-                const messageId = result?.message?.msgId ?? result?.msgId ?? null;
+                const messageId = result?.message?.msgId ?? null;
                 return ok({ success: true, messageId });
             } catch (e) {
-                console.error("[mcp-tools] zalo_send_message error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_send_message error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -217,8 +233,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                 const attachmentIds = (result?.attachment ?? []).map((a) => a.msgId);
                 return ok({ success: true, messageId, attachmentIds });
             } catch (e) {
-                console.error("[mcp-tools] zalo_send_attachment error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_send_attachment error:", errorMessage(e));
+                return err(errorMessage(e));
             } finally {
                 if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
             }
@@ -243,7 +259,9 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                     .max(1)
                     .default(THREAD_USER)
                     .describe("Thread type: 0=DM(User), 1=Group"),
-                reaction: z.enum(Object.keys(REACTION_CODES)).describe("Reaction: heart, like, haha, wow, cry, angry"),
+                reaction: z
+                    .enum(Object.keys(REACTION_CODES) as [keyof typeof REACTION_CODES])
+                    .describe("Reaction: heart, like, haha, wow, cry, angry"),
                 cliMsgId: z
                     .string()
                     .optional()
@@ -261,8 +279,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                 });
                 return ok({ success: true });
             } catch (e) {
-                console.error("[mcp-tools] zalo_react error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_react error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -298,8 +316,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                 const filtered = type === "all" ? enriched : enriched.filter((t) => t.threadType === type);
                 return ok({ threads: filtered, total: filtered.length });
             } catch (e) {
-                console.error("[mcp-tools] zalo_list_threads error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_list_threads error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -328,8 +346,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                 const results = nameCache.search(query, type, limit);
                 return ok({ results, total: results.length });
             } catch (e) {
-                console.error("[mcp-tools] zalo_search_threads error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_search_threads error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -382,15 +400,15 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                                 });
                             }
                         } catch (e) {
-                            console.error("[mcp-tools] zalo_list_conversations batch failed:", e.message);
+                            console.error("[mcp-tools] zalo_list_conversations batch failed:", errorMessage(e));
                         }
                     }
                 }
 
                 return ok({ conversations, total: conversations.length });
             } catch (e) {
-                console.error("[mcp-tools] zalo_list_conversations error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_list_conversations error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -416,12 +434,12 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                 const memberIds = allIds.slice(0, limit);
                 const admins = new Set(group.adminIds || []);
 
-                const profiles = {};
+                const profiles: Awaited<ReturnType<API["getGroupMembersInfo"]>>["profiles"] = {};
                 for (const batch of toBatches(memberIds, BATCH_SIZE)) {
                     try {
                         Object.assign(profiles, (await api.getGroupMembersInfo(batch))?.profiles || {});
                     } catch (e) {
-                        console.error("[mcp-tools] zalo_get_group_members batch failed:", e.message);
+                        console.error("[mcp-tools] zalo_get_group_members batch failed:", errorMessage(e));
                     }
                 }
 
@@ -433,8 +451,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                 }));
                 return ok({ groupId, name: group.name || null, total: group.totalMember ?? allIds.length, members });
             } catch (e) {
-                console.error("[mcp-tools] zalo_get_group_members error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_get_group_members error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -460,8 +478,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                     avatar: profile.avatar || null,
                 });
             } catch (e) {
-                console.error("[mcp-tools] zalo_get_user_info error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_get_user_info error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -486,8 +504,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                 const discarded = buffer.markRead(cursor);
                 return ok({ success: true, discarded });
             } catch (e) {
-                console.error("[mcp-tools] zalo_mark_read error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_mark_read error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -523,7 +541,7 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
             try {
                 // Capture once so handler add/remove always hit the same listener, even across a re-login
                 const listener = getApi().listener;
-                const allMessages = [];
+                const allMessages: HistoryMessage[] = [];
                 let cursor = lastMsgId || null;
                 let done = false;
                 const maxPages = Math.ceil(limit / 20);
@@ -531,8 +549,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
 
                 while (!done && allMessages.length < limit && page < maxPages) {
                     page++;
-                    const pageMessages = await new Promise((resolve) => {
-                        const handler = (messages) => {
+                    const pageMessages = await new Promise<Message[]>((resolve) => {
+                        const handler = (messages: Message[]) => {
                             clearTimeout(timer);
                             listener.removeListener("old_messages", handler);
                             resolve(messages);
@@ -597,8 +615,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
                     hasMore: !done,
                 });
             } catch (e) {
-                console.error("[mcp-tools] zalo_get_history error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_get_history error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );
@@ -644,8 +662,8 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
 
                 return ok({ success: true, path: localPath, mediaType: message.type });
             } catch (e) {
-                console.error("[mcp-tools] zalo_view_media error:", e.message);
-                return err(e.message);
+                console.error("[mcp-tools] zalo_view_media error:", errorMessage(e));
+                return err(errorMessage(e));
             }
         },
     );

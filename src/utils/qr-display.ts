@@ -19,10 +19,16 @@ import { platform } from "os";
 import { CONFIG_DIR } from "../core/credentials.ts";
 import { info } from "./output.ts";
 
+/** The part of zca-js's QRCodeGenerated login event that displayQR reads. */
+export interface QrEvent {
+    data?: { image?: string } | null;
+    actions?: { saveToFile?: (qrPath?: string) => Promise<unknown> } | null;
+}
+
 const QR_PATH = resolve(CONFIG_DIR, "qr.png");
 
 /** Get platform-specific command to open a file. */
-function getOpenCommand() {
+function getOpenCommand(): string {
     switch (platform()) {
         case "darwin":
             return "open";
@@ -37,9 +43,9 @@ function getOpenCommand() {
  * Display QR code from a zca-js login QR event.
  * Synchronous — safe to call from zca-js callback.
  * In JSON mode (--json), outputs structured event for AI agents.
- * @param {object} event - zca-js QR callback event
+ * @param event - zca-js QR callback event
  */
-export function displayQR(event) {
+export function displayQR(event: QrEvent): void {
     const imageB64 = event.data?.image || "";
     const jsonMode = process.env.ZALO_JSON_MODE === "1";
 
@@ -86,6 +92,6 @@ export function displayQR(event) {
 }
 
 /** Get the QR image path. */
-export function getQRPath() {
+export function getQRPath(): string {
     return QR_PATH;
 }

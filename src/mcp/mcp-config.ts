@@ -8,8 +8,38 @@ import { CONFIG_DIR } from "../core/credentials.ts";
 
 const MCP_CONFIG_FILE = join(CONFIG_DIR, "mcp-config.json");
 
+/** MCP server configuration persisted in mcp-config.json. */
+export interface MCPConfig {
+    watchThreads: string[];
+    mode: string;
+    triggerKeywords: string[];
+    notify: {
+        enabled: boolean;
+        thread: string | null;
+        on: string[];
+        cooldown: string | number;
+    };
+    limits: {
+        maxMessagesPerPoll: number;
+        autoDigestThreshold: number;
+        bufferMaxAge: string | number;
+        bufferMaxSize: number;
+        sessionIdleTimeout: string | number;
+    };
+    media: {
+        downloadDir: string | null;
+        autoOpen: boolean;
+    };
+}
+
+/** The slice of MCPConfig the tools, resources and HTTP transport read; every part may be absent. */
+export interface MCPServerConfig {
+    limits?: Partial<MCPConfig["limits"]>;
+    media?: Partial<MCPConfig["media"]>;
+}
+
 /** Default MCP config — sensible defaults for local development */
-export function getDefaultConfig() {
+export function getDefaultConfig(): MCPConfig {
     return {
         watchThreads: ["dm:*", "group:*"],
         mode: "manual",
@@ -36,9 +66,8 @@ export function getDefaultConfig() {
 
 /**
  * Load MCP config from disk, merged with defaults.
- * @returns {object} MCP config
  */
-export function loadMCPConfig() {
+export function loadMCPConfig(): MCPConfig {
     const defaults = getDefaultConfig();
     try {
         const raw = readFileSync(MCP_CONFIG_FILE, "utf-8");
@@ -61,7 +90,7 @@ export function loadMCPConfig() {
  * Save MCP config to disk.
  * @param {object} config
  */
-export function saveMCPConfig(config) {
+export function saveMCPConfig(config: MCPConfig): void {
     mkdirSync(CONFIG_DIR, { recursive: true });
     writeFileSync(MCP_CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
 }
@@ -71,12 +100,12 @@ export function saveMCPConfig(config) {
  * @param {string|number} duration
  * @returns {number} Milliseconds
  */
-export function parseDuration(duration) {
+export function parseDuration(duration: string | number): number {
     if (typeof duration === "number") return duration;
     const match = String(duration).match(/^(\d+)\s*(h|m|s|ms)?$/i);
     if (!match) return 0;
     const value = parseInt(match[1], 10);
     const unit = (match[2] || "ms").toLowerCase();
-    const multipliers = { h: 3600000, m: 60000, s: 1000, ms: 1 };
+    const multipliers: Record<string, number> = { h: 3600000, m: 60000, s: 1000, ms: 1 };
     return value * (multipliers[unit] || 1);
 }

@@ -1,21 +1,36 @@
+import type { NormalizedMessage } from "./normalize-message.ts";
+
 /**
  * Ring buffer storing messages per thread with cursor-based incremental reads.
  * Shared by both stdio and HTTP MCP transports.
  */
 
+/** A message held by the buffer, stamped with its global read cursor. */
+export type BufferedMessage = NormalizedMessage & { _cursor: number };
+
+type PushListener = (threadId: string, message: BufferedMessage) => void;
+
+export interface ThreadStats {
+    threadId: string;
+    unread: number;
+    total: number;
+    lastActivity: number;
+}
+
 export class MessageBuffer {
+    _threads = new Map<string, { messages: BufferedMessage[]; lastActivity: number }>();
+    _maxSize: number;
+    _maxAge: number;
+    _globalCursor = 0;
+    _pushListeners = new Set<PushListener>();
+
     /**
-     * @param {number} maxSize - Max messages per thread before eviction
-     * @param {number} maxAge - Max message age in ms before eviction (default 2h)
+     * @param maxSize - Max messages per thread before eviction
+     * @param maxAge - Max message age in ms before eviction (default 2h)
      */
     constructor(maxSize = 500, maxAge = 2 * 60 * 60 * 1000) {
-        /** @type {Map<string, { messages: Array, lastActivity: number }>} */
-        this._threads = new Map();
         this._maxSize = maxSize;
         this._maxAge = maxAge;
-        this._globalCursor = 0;
-        /** @type {Set<(threadId: string, message: object) => void>} */
-        this._pushListeners = new Set();
     }
 
     /**
@@ -23,7 +38,7 @@ export class MessageBuffer {
      * @param {(threadId: string, message: object) => void} listener
      * @returns {() => void} Unsubscribe function
      */
-    onPush(listener) {
+    onPush(listener: PushListener): () => void {
         this._pushListeners.add(listener);
         return () => this._pushListeners.delete(listener);
     }
@@ -33,21 +48,21 @@ export class MessageBuffer {
      * @param {string} threadId
      * @param {object} message - Normalized message object
      */
-    push(threadId, message) {
+    push(threadId: string, message: NormalizedMessage): void {
         if (!this._threads.has(threadId)) {
             this._threads.set(threadId, { messages: [], lastActivity: Date.now() });
         }
-        const thread = this._threads.get(threadId);
+        const thread = this._threads.get(threadId)!;
         // Assign global cursor for incremental reads
-        message._cursor = ++this._globalCursor;
-        thread.messages.push(message);
+        const buffered = Object.assign(message, { _cursor: ++this._globalCursor });
+        thread.messages.push(buffered);
         thread.lastActivity = Date.now();
         this._evict(threadId);
         for (const listener of this._pushListeners) {
             try {
-                listener(threadId, message);
+                listener(threadId, buffered);
             } catch (e) {
-                console.error("[message-buffer] push listener failed:", e.message);
+                console.error("[message-buffer] push listener failed:", (e as Error).message);
             }
         }
     }
@@ -59,11 +74,17 @@ export class MessageBuffer {
      * @param {number} [maxCount=20] - Max messages to return
      * @returns {{ messages: Array, cursor: number, hasMore: boolean }}
      */
-    read(threadId, since = 0, maxCount = 20) {
-        const sources = threadId ? [this._threads.get(threadId)].filter(Boolean) : Array.from(this._threads.values());
+    read(
+        threadId?: string,
+        since = 0,
+        maxCount = 20,
+    ): { messages: BufferedMessage[]; cursor: number; hasMore: boolean } {
+        const sources = threadId
+            ? [this._threads.get(threadId)].filter((t) => t !== undefined)
+            : Array.from(this._threads.values());
 
         // Collect all messages after cursor, sorted by cursor
-        const all = [];
+        const all: BufferedMessage[] = [];
         for (const thread of sources) {
             for (const msg of thread.messages) {
                 if (msg._cursor > since) all.push(msg);
@@ -83,7 +104,7 @@ export class MessageBuffer {
      * @param {number} cursor
      * @returns {number} Count of discarded messages
      */
-    markRead(cursor) {
+    markRead(cursor: number): number {
         let discarded = 0;
         for (const [, thread] of this._threads) {
             const before = thread.messages.length;
@@ -98,8 +119,8 @@ export class MessageBuffer {
      * @param {number} [readCursor=0] - Messages after this cursor are "unread"
      * @returns {Array<{ threadId: string, unread: number, total: number, lastActivity: number }>}
      */
-    getStats(readCursor = 0) {
-        const stats = [];
+    getStats(readCursor = 0): ThreadStats[] {
+        const stats: ThreadStats[] = [];
         for (const [threadId, thread] of this._threads) {
             if (thread.messages.length === 0) continue;
             const unread = thread.messages.filter((m) => m._cursor > readCursor).length;
@@ -118,7 +139,7 @@ export class MessageBuffer {
      * @param {string} threadId
      * @returns {string|null}
      */
-    getThreadType(threadId) {
+    getThreadType(threadId: string): string | null {
         const thread = this._threads.get(threadId);
         return thread?.messages?.[0]?.threadType ?? null;
     }
@@ -127,7 +148,7 @@ export class MessageBuffer {
      * Evict messages that exceed maxSize or maxAge for a given thread.
      * @param {string} threadId
      */
-    _evict(threadId) {
+    _evict(threadId: string): void {
         const thread = this._threads.get(threadId);
         if (!thread) return;
 

@@ -2,6 +2,7 @@
  * Login commands — QR login, credential login, logout, status, whoami.
  */
 
+import type { Command } from "commander";
 import { readFileSync, unlinkSync } from "fs";
 import {
     loginWithQR,
@@ -18,8 +19,9 @@ import { maskProxy } from "../utils/proxy-helpers.ts";
 import { displayQR, getQRPath } from "../utils/qr-display.ts";
 import { startQrServer } from "../utils/qr-http-server.ts";
 import { success, error, info, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
-export function registerLoginCommands(program) {
+export function registerLoginCommands(program: Command): void {
     program
         .command("login")
         .description("Login to Zalo via QR code scan or from exported credentials")
@@ -28,17 +30,53 @@ export function registerLoginCommands(program) {
         .option("--qr-url", "Start local HTTP server to view QR in browser (for VPS/headless)")
         .option("-q, --qr-port <port>", "Port for QR HTTP server (default: 18927)", parseInt)
         .option("--credentials <path>", "Login from exported credentials file (skip QR)")
-        .action(async (opts) => {
-            // Credential-based login (headless/CI)
-            if (opts.credentials) {
+        .action(
+            async (opts: { proxy?: string; name: string; qrUrl?: boolean; qrPort?: number; credentials?: string }) => {
+                // Credential-based login (headless/CI)
+                if (opts.credentials) {
+                    try {
+                        const raw = JSON.parse(readFileSync(opts.credentials, "utf-8"));
+                        const proxy = opts.proxy || raw.proxy || null;
+                        if (proxy) info(`Using proxy: ${maskProxy(proxy)}`);
+
+                        const { ownId } = await loginWithCredentials(raw, proxy);
+
+                        let displayName = opts.name || raw.name || "";
+                        try {
+                            const accountInfo = await getApi().fetchAccountInfo();
+                            displayName = accountInfo?.profile?.displayName || displayName || ownId;
+                        } catch {}
+
+                        const creds = extractCredentials();
+                        saveCredentials(ownId, creds);
+                        addAccount(ownId, displayName, proxy);
+                        success(`Logged in as ${displayName} (${ownId})`);
+                    } catch (e) {
+                        error(`Login from credentials failed: ${errorMessage(e)}`);
+                        process.exit(1);
+                    }
+                    return;
+                }
+
+                // QR-based login
+                const jsonMode = program.opts().json;
+                if (opts.proxy) info(`Using proxy: ${maskProxy(opts.proxy)}`);
+                if (!jsonMode) info("Generating QR code... Scan with Zalo mobile app.");
+
+                // Assigned inside the QR callback, which TypeScript cannot see
+                let qrServer = null as ReturnType<typeof startQrServer> | null;
                 try {
-                    const raw = JSON.parse(readFileSync(opts.credentials, "utf-8"));
-                    const proxy = opts.proxy || raw.proxy || null;
-                    if (proxy) info(`Using proxy: ${maskProxy(proxy)}`);
+                    const { ownId } = await loginWithQR(opts.proxy, (event) => {
+                        displayQR(event);
 
-                    const { ownId } = await loginWithCredentials(raw, proxy);
+                        // Always start HTTP server for QR scanning (no flag needed)
+                        if (!qrServer) {
+                            qrServer = startQrServer(getQRPath(), opts.qrPort || 18927);
+                        }
+                    });
 
-                    let displayName = opts.name || raw.name || "";
+                    // Fetch display name from Zalo profile
+                    let displayName = opts.name || "";
                     try {
                         const accountInfo = await getApi().fetchAccountInfo();
                         displayName = accountInfo?.profile?.displayName || displayName || ownId;
@@ -46,64 +84,31 @@ export function registerLoginCommands(program) {
 
                     const creds = extractCredentials();
                     saveCredentials(ownId, creds);
-                    addAccount(ownId, displayName, proxy);
-                    success(`Logged in as ${displayName} (${ownId})`);
-                } catch (e) {
-                    error(`Login from credentials failed: ${e.message}`);
-                    process.exit(1);
-                }
-                return;
-            }
+                    addAccount(ownId, displayName, opts.proxy);
 
-            // QR-based login
-            const jsonMode = program.opts().json;
-            if (opts.proxy) info(`Using proxy: ${maskProxy(opts.proxy)}`);
-            if (!jsonMode) info("Generating QR code... Scan with Zalo mobile app.");
-
-            let qrServer = null;
-            try {
-                const { ownId } = await loginWithQR(opts.proxy, (event) => {
-                    displayQR(event);
-
-                    // Always start HTTP server for QR scanning (no flag needed)
-                    if (!qrServer) {
-                        qrServer = startQrServer(getQRPath(), opts.qrPort || 18927);
+                    if (jsonMode) {
+                        console.log(JSON.stringify({ event: "login_success", ownId, name: displayName }));
+                    } else {
+                        success(`Logged in as ${displayName} (${ownId})`);
                     }
-                });
-
-                // Fetch display name from Zalo profile
-                let displayName = opts.name || "";
-                try {
-                    const accountInfo = await getApi().fetchAccountInfo();
-                    displayName = accountInfo?.profile?.displayName || displayName || ownId;
-                } catch {}
-
-                const creds = extractCredentials();
-                saveCredentials(ownId, creds);
-                addAccount(ownId, displayName, opts.proxy);
-
-                if (jsonMode) {
-                    console.log(JSON.stringify({ event: "login_success", ownId, name: displayName }));
-                } else {
-                    success(`Logged in as ${displayName} (${ownId})`);
+                } catch (e) {
+                    if (jsonMode) {
+                        console.log(JSON.stringify({ event: "login_error", message: errorMessage(e) }));
+                    } else {
+                        error(`Login failed: ${errorMessage(e)}`);
+                    }
+                    process.exit(1);
+                } finally {
+                    if (qrServer) qrServer.close();
                 }
-            } catch (e) {
-                if (jsonMode) {
-                    console.log(JSON.stringify({ event: "login_error", message: e.message }));
-                } else {
-                    error(`Login failed: ${e.message}`);
-                }
-                process.exit(1);
-            } finally {
-                if (qrServer) qrServer.close();
-            }
-        });
+            },
+        );
 
     program
         .command("logout")
         .description("Logout current account (keeps credentials for auto-login)")
         .option("--purge", "Also delete saved credentials (must QR login again)")
-        .action((opts) => {
+        .action((opts: { purge?: boolean }) => {
             const active = getActive();
             clearSession();
 
@@ -159,7 +164,7 @@ export function registerLoginCommands(program) {
                     info(`Phone: ${p.phoneNumber || "?"}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 }

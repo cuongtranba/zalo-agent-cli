@@ -2,6 +2,7 @@
  * Normalize raw zca-js message events into the MCP buffer's message shape.
  */
 
+import type { Message, SendMessageQuote } from "zca-js";
 import { extractMessageText } from "../utils/extract-message-text.ts";
 
 /**
@@ -10,17 +11,40 @@ import { extractMessageText } from "../utils/extract-message-text.ts";
  */
 export const QUOTE_SOURCE = Symbol("quoteSource");
 
+/** A message in the shape the MCP buffer stores and tools return. */
+export interface NormalizedMessage {
+    id: string;
+    cliMsgId: string | null;
+    threadId: string;
+    threadType: "dm" | "group";
+    senderId: string | null;
+    senderName: string | null;
+    text: string;
+    timestamp: number;
+    ts: number | null;
+    type: string;
+    attachment: { type: string; url: string | null; description: string | null; localPath?: string } | null;
+    replyTo: { msgId: string; ownerId: string; text: string } | null;
+    /** Thread display name, added when read through the name cache. */
+    threadName?: string;
+    /** Read cursor, assigned by MessageBuffer.push(). */
+    _cursor?: number;
+    [QUOTE_SOURCE]?: SendMessageQuote;
+}
+
 /**
  * Normalize a raw zca-js message event into the buffer's message shape.
  * @param {object} msg - Raw zca-js message event
  * @returns {object} Normalized message
  */
-export function normalizeMessage(msg) {
+export function normalizeMessage(msg: Message): NormalizedMessage {
     const data = msg.data;
     const rawContent = data.content;
+    // Non-text content is a loosely typed payload; link/file messages carry href and title
+    const content = rawContent as { href?: string; title?: string } | null;
     const isText = typeof rawContent === "string";
     const quote = data.quote;
-    const message = {
+    const message: NormalizedMessage = {
         id: data.msgId,
         cliMsgId: data.cliMsgId ? String(data.cliMsgId) : null,
         threadId: msg.threadId,
@@ -35,8 +59,8 @@ export function normalizeMessage(msg) {
             !isText && rawContent
                 ? {
                       type: data.msgType,
-                      url: rawContent.href || null,
-                      description: rawContent.title || null,
+                      url: content?.href || null,
+                      description: content?.title || null,
                   }
                 : null,
         replyTo: quote ? { msgId: String(quote.globalMsgId ?? ""), ownerId: quote.ownerId, text: quote.msg } : null,

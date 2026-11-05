@@ -5,6 +5,7 @@
  */
 
 import http from "http";
+import type { AddressInfo } from "net";
 import { readFileSync, existsSync } from "fs";
 import { info } from "./output.ts";
 
@@ -14,7 +15,11 @@ import { info } from "./output.ts";
  * @param {number} port - default 18927
  * @returns {{ url: string, close: () => void }}
  */
-export function startQrServer(qrImagePath, port = 18927, tryPorts = [18927, 8080, 3000, 9000]) {
+export function startQrServer(
+    qrImagePath: string,
+    port = 18927,
+    tryPorts = [18927, 8080, 3000, 9000],
+): { url: string; close: () => void } {
     const server = http.createServer(async (req, res) => {
         if (req.url === "/qr" || req.url === "/") {
             if (!existsSync(qrImagePath)) {
@@ -136,9 +141,9 @@ setInterval(async()=>{
     }
 
     server.on("listening", async () => {
-        const actualPort = server.address().port;
+        const actualPort = (server.address() as AddressInfo).port;
         const jsonMode = process.env.ZALO_JSON_MODE === "1";
-        let publicIp = null;
+        let publicIp: string | null = null;
 
         // Auto-detect public IP for VPS users
         try {
@@ -166,7 +171,7 @@ setInterval(async()=>{
         }
     });
 
-    server.on("error", (err) => {
+    server.on("error", (err: NodeJS.ErrnoException) => {
         if (err.code === "EADDRINUSE" || err.code === "EACCES") {
             currentPortIdx++;
             if (currentPortIdx < tryPorts.length) {

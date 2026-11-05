@@ -4,13 +4,22 @@
  * Provides fuzzy Vietnamese-aware search for thread discovery.
  */
 
+import type { API } from "zca-js";
+
+/** Cached info for one thread. */
+export interface ThreadInfo {
+    name: string;
+    type: "group" | "dm";
+    memberCount?: number;
+}
+
 /**
  * Normalize Vietnamese text for fuzzy matching.
  * Strips diacritics and lowercases for accent-insensitive comparison.
  * @param {string} text
  * @returns {string}
  */
-function normalizeVietnamese(text) {
+function normalizeVietnamese(text: string): string {
     return text
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
@@ -20,18 +29,15 @@ function normalizeVietnamese(text) {
 }
 
 export class ThreadNameCache {
-    constructor() {
-        /** @type {Map<string, { name: string, type: "group"|"dm", memberCount?: number }>} */
-        this._cache = new Map();
-        this._ready = false;
-    }
+    _cache = new Map<string, ThreadInfo>();
+    _ready = false;
 
     /**
      * Initialize cache by fetching all groups and friends from Zalo API.
      * Batches group info requests (50 per batch) to avoid rate limits.
      * @param {object} api - zca-js API instance
      */
-    async init(api) {
+    async init(api: API): Promise<void> {
         const start = Date.now();
         let groupCount = 0;
         let friendCount = 0;
@@ -56,11 +62,11 @@ export class ThreadNameCache {
                         groupCount++;
                     }
                 } catch (e) {
-                    console.error(`[thread-name-cache] Batch getGroupInfo failed (offset ${i}):`, e.message);
+                    console.error(`[thread-name-cache] Batch getGroupInfo failed (offset ${i}):`, (e as Error).message);
                 }
             }
         } catch (e) {
-            console.error("[thread-name-cache] getAllGroups failed:", e.message);
+            console.error("[thread-name-cache] getAllGroups failed:", (e as Error).message);
         }
 
         // Load friends (DM threads)
@@ -77,7 +83,7 @@ export class ThreadNameCache {
                 }
             }
         } catch (e) {
-            console.error("[thread-name-cache] getAllFriends failed:", e.message);
+            console.error("[thread-name-cache] getAllFriends failed:", (e as Error).message);
         }
 
         this._ready = true;
@@ -90,7 +96,7 @@ export class ThreadNameCache {
      * @param {string} threadId
      * @returns {{ name: string, type: "group"|"dm", memberCount?: number } | null}
      */
-    get(threadId) {
+    get(threadId: string): ThreadInfo | null {
         return this._cache.get(threadId) || null;
     }
 
@@ -99,7 +105,7 @@ export class ThreadNameCache {
      * @param {string} threadId
      * @returns {string | null}
      */
-    getName(threadId) {
+    getName(threadId: string): string | null {
         return this._cache.get(threadId)?.name || null;
     }
 
@@ -110,9 +116,9 @@ export class ThreadNameCache {
      * @param {number} [limit=10] - Max results
      * @returns {Array<{ threadId: string, name: string, type: "group"|"dm", memberCount?: number }>}
      */
-    search(query, type = "all", limit = 10) {
+    search(query: string, type: "group" | "dm" | "all" = "all", limit = 10): Array<ThreadInfo & { threadId: string }> {
         const normalizedQuery = normalizeVietnamese(query);
-        const results = [];
+        const results: Array<ThreadInfo & { threadId: string }> = [];
 
         for (const [threadId, info] of this._cache) {
             if (type !== "all" && info.type !== type) continue;
@@ -141,7 +147,7 @@ export class ThreadNameCache {
      * @param {string} threadId
      * @param {object} info - Partial update: { name?, type?, memberCount? }
      */
-    set(threadId, info) {
+    set(threadId: string, info: Partial<ThreadInfo>): void {
         const existing = this._cache.get(threadId);
         if (existing) {
             this._cache.set(threadId, { ...existing, ...info });
@@ -151,12 +157,12 @@ export class ThreadNameCache {
     }
 
     /** @returns {boolean} Whether cache has been initialized */
-    get ready() {
+    get ready(): boolean {
         return this._ready;
     }
 
     /** @returns {number} Total cached entries */
-    get size() {
+    get size(): number {
         return this._cache.size;
     }
 }

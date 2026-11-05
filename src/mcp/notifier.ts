@@ -4,10 +4,12 @@
  * Batches messages within a cooldown window.
  */
 
-import { parseDuration } from "./mcp-config.ts";
+import type { API } from "zca-js";
+import { parseDuration, type MCPConfig } from "./mcp-config.ts";
+import type { NormalizedMessage } from "./normalize-message.ts";
 
 /** Emoji prefix per message type for notification previews */
-const TYPE_EMOJI = {
+const TYPE_EMOJI: Record<string, string> = {
     text: "💬",
     image: "📷",
     file: "📎",
@@ -19,7 +21,7 @@ const TYPE_EMOJI = {
 };
 
 /** Vietnamese label per message type for notification breakdown */
-const TYPE_LABEL = {
+const TYPE_LABEL: Record<string, string> = {
     text: "text",
     image: "ảnh",
     file: "file",
@@ -30,24 +32,37 @@ const TYPE_LABEL = {
     gif: "gif",
 };
 
+export interface NotifierOptions {
+    /** Suppress notifications while any subscriber exists */
+    inboxSubscribers?: { count: () => number } | null;
+}
+
 export class ZaloNotifier {
+    _getApi: () => API;
+    _enabled: boolean;
+    _notifyThread: string | null;
+    _onTypes: Set<string>;
+    _cooldownMs: number;
+    _pending: NormalizedMessage[] = []; // Messages queued during cooldown window
+    _timer: ReturnType<typeof setTimeout> | null = null;
+    _inboxSubscribers: { count: () => number } | null;
+
     /**
-     * @param {() => object} getApi - Returns the current zca-js API instance (changes after re-login)
-     * @param {object} config - Full MCP config (uses config.notify section)
-     * @param {boolean} config.notify.enabled
-     * @param {string|null} config.notify.thread - Group ID to send notifications to
-     * @param {string[]} config.notify.on - Event types to notify on (e.g. ["dm"])
-     * @param {string} config.notify.cooldown - Debounce window (e.g. "5m")
-     * @param {{ inboxSubscribers?: { count: () => number } }} [options] - Suppress notifications while any subscriber exists
+     * @param getApi - Returns the current zca-js API instance (changes after re-login)
+     * @param config - MCP config; uses the notify section:
+     *   enabled, thread (group ID to notify), on (event types, e.g. ["dm"]), cooldown (debounce window, e.g. "5m")
+     * @param options - inboxSubscribers suppresses notifications while any subscriber exists
      */
-    constructor(getApi, config, { inboxSubscribers = null } = {}) {
+    constructor(
+        getApi: () => API,
+        config: { notify?: Partial<MCPConfig["notify"]> },
+        { inboxSubscribers = null }: NotifierOptions = {},
+    ) {
         this._getApi = getApi;
         this._enabled = config.notify?.enabled || false;
         this._notifyThread = config.notify?.thread || null;
         this._onTypes = new Set(config.notify?.on || ["dm"]);
         this._cooldownMs = parseDuration(config.notify?.cooldown || "5m");
-        this._pending = []; // Messages queued during cooldown window
-        this._timer = null;
         this._inboxSubscribers = inboxSubscribers;
     }
 
@@ -55,7 +70,7 @@ export class ZaloNotifier {
      * Called when a new message arrives. Queues notification if conditions are met.
      * @param {object} message - Normalized message object
      */
-    onMessage(message) {
+    onMessage(message: NormalizedMessage): void {
         if (!this._shouldNotify(message)) return;
         this._pending.push(message);
         // Start cooldown timer only once per batch window
@@ -69,14 +84,14 @@ export class ZaloNotifier {
      * @param {object} message
      * @returns {boolean}
      */
-    _shouldNotify(message) {
+    _shouldNotify(message: NormalizedMessage): boolean {
         if (!this._enabled || !this._notifyThread) return false;
-        if (this._inboxSubscribers?.count() > 0) return false;
+        if ((this._inboxSubscribers?.count() ?? 0) > 0) return false;
         return this._onTypes.has(message.threadType);
     }
 
     /** Flush pending notifications as a single batched message to the notify thread */
-    async _flush() {
+    async _flush(): Promise<void> {
         this._timer = null;
         if (this._pending.length === 0) return;
 
@@ -102,9 +117,10 @@ export class ZaloNotifier {
 
         try {
             // threadType 1 = Group conversation
-            await this._getApi().sendMessage(text, this._notifyThread, 1);
+            // _notifyThread is set: onMessage only queues messages when it is
+            await this._getApi().sendMessage(text, this._notifyThread!, 1);
         } catch (err) {
-            console.error("Notifier send failed:", err.message);
+            console.error("Notifier send failed:", (err as Error).message);
         }
     }
 
@@ -113,8 +129,8 @@ export class ZaloNotifier {
      * @param {object[]} messages - Array of normalized messages
      * @returns {string}
      */
-    _buildTypeBreakdown(messages) {
-        const counts = {};
+    _buildTypeBreakdown(messages: NormalizedMessage[]): string {
+        const counts: Record<string, number> = {};
         for (const m of messages) {
             const t = m.type || "text";
             counts[t] = (counts[t] || 0) + 1;
@@ -125,13 +141,13 @@ export class ZaloNotifier {
     }
 
     /** Format cooldown duration as human-readable string (e.g. "5 phút", "1h") */
-    _formatWindow() {
+    _formatWindow(): string {
         const mins = Math.round(this._cooldownMs / 60000);
         return mins >= 60 ? `${Math.round(mins / 60)}h` : `${mins} phút`;
     }
 
     /** Clean up pending timer on shutdown and attempt final flush */
-    destroy() {
+    destroy(): void {
         if (this._timer) {
             clearTimeout(this._timer);
             this._flush();

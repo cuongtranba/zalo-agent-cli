@@ -7,7 +7,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 /** Bank name aliases (lowercase, no spaces) → BIN codes. */
-export const BANK_NAME_TO_BIN = {
+export const BANK_NAME_TO_BIN: Record<string, number> = {
     abbank: 970425,
     acb: 970416,
     agribank: 970405,
@@ -70,7 +70,7 @@ export const BANK_NAME_TO_BIN = {
 };
 
 /** BIN → display name. */
-export const BIN_TO_DISPLAY = {
+export const BIN_TO_DISPLAY: Record<number, string> = {
     970425: "ABBank",
     970416: "ACB",
     970405: "Agribank",
@@ -130,7 +130,7 @@ export const BIN_TO_DISPLAY = {
 };
 
 /** BIN → SePay short_name for qr.sepay.vn URL. */
-const BIN_TO_SEPAY = {
+const BIN_TO_SEPAY: Record<number, string> = {
     970415: "VietinBank",
     970436: "Vietcombank",
     970422: "MBBank",
@@ -188,7 +188,7 @@ const BIN_TO_SEPAY = {
  * @param {string} input - Bank name alias or BIN number
  * @returns {number|null}
  */
-export function resolveBankBin(input) {
+export function resolveBankBin(input: string): number | null {
     if (/^\d+$/.test(input)) {
         const n = Number(input);
         return BIN_TO_DISPLAY[n] ? n : null;
@@ -205,7 +205,13 @@ export function resolveBankBin(input) {
  * @param {string} template - compact | print | qronly
  * @returns {Promise<string|null>} Temp file path or null on failure
  */
-export async function generateQrTransferImage(bin, accountNumber, amount = null, content = null, template = "compact") {
+export async function generateQrTransferImage(
+    bin: number,
+    accountNumber: string,
+    amount: number | null = null,
+    content: string | null = null,
+    template = "compact",
+): Promise<string | null> {
     const sepayShort = BIN_TO_SEPAY[bin];
     if (!sepayShort) return null;
 

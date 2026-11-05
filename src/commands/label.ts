@@ -2,10 +2,12 @@
  * Label commands — list and update conversation/contact labels.
  */
 
+import type { Command } from "commander";
 import { getApi } from "../core/zalo-client.ts";
 import { success, error, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
-export function registerLabelCommands(program) {
+export function registerLabelCommands(program: Command): void {
     const label = program.command("label").description("Manage conversation labels");
 
     label
@@ -16,14 +18,14 @@ export function registerLabelCommands(program) {
                 const result = await getApi().getLabels();
                 output(result, program.opts().json);
             } catch (e) {
-                error(`Get labels failed: ${e.message}`);
+                error(`Get labels failed: ${errorMessage(e)}`);
             }
         });
 
     label
         .command("update <json>")
         .description('Update labels (JSON payload: {"labelData":[...],"version":N})')
-        .action(async (json) => {
+        .action(async (json: string) => {
             try {
                 const payload = JSON.parse(json);
                 const result = await getApi().updateLabels(payload);
@@ -32,7 +34,7 @@ export function registerLabelCommands(program) {
                 if (e instanceof SyntaxError) {
                     error(`Invalid JSON: ${e.message}`);
                 } else {
-                    error(`Update labels failed: ${e.message}`);
+                    error(`Update labels failed: ${errorMessage(e)}`);
                 }
             }
         });

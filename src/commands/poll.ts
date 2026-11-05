@@ -2,10 +2,12 @@
  * Poll commands — create, view, vote, add options, lock, and share polls in groups.
  */
 
+import type { Command } from "commander";
 import { getApi } from "../core/zalo-client.ts";
 import { success, error, info, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
-export function registerPollCommands(program) {
+export function registerPollCommands(program: Command): void {
     const poll = program.command("poll").description("Create and manage polls in groups");
 
     poll.command("create <groupId> <question> <options...>")
@@ -15,40 +17,53 @@ export function registerPollCommands(program) {
         .option("--anonymous", "Hide voter identities")
         .option("--hide-preview", "Hide results until voted")
         .option("--expire <minutes>", "Auto-close after N minutes", parseInt)
-        .action(async (groupId, question, options, opts) => {
-            try {
-                if (options.length < 2) {
-                    error("A poll requires at least 2 options.");
-                    return;
-                }
-                const expiredTime = opts.expire ? opts.expire * 60 * 1000 : 0;
-                const result = await getApi().createPoll(
-                    {
-                        question,
-                        options,
-                        allowMultiChoices: !!opts.multi,
-                        allowAddNewOption: !!opts.addOptions,
-                        isAnonymous: !!opts.anonymous,
-                        hideVotePreview: !!opts.hidePreview,
-                        expiredTime,
-                    },
-                    groupId,
-                );
-                output(result, program.opts().json, () => {
-                    success(`Poll created: "${question}"`);
-                    info(`Poll ID: ${result.poll_id}`);
-                    if (result.options) {
-                        result.options.forEach((o) => console.log(`  [${o.option_id}] ${o.content}`));
+        .action(
+            async (
+                groupId: string,
+                question: string,
+                options: string[],
+                opts: {
+                    multi?: boolean;
+                    addOptions?: boolean;
+                    anonymous?: boolean;
+                    hidePreview?: boolean;
+                    expire?: number;
+                },
+            ) => {
+                try {
+                    if (options.length < 2) {
+                        error("A poll requires at least 2 options.");
+                        return;
                     }
-                });
-            } catch (e) {
-                error(`Create poll failed: ${e.message}`);
-            }
-        });
+                    const expiredTime = opts.expire ? opts.expire * 60 * 1000 : 0;
+                    const result = await getApi().createPoll(
+                        {
+                            question,
+                            options,
+                            allowMultiChoices: !!opts.multi,
+                            allowAddNewOption: !!opts.addOptions,
+                            isAnonymous: !!opts.anonymous,
+                            hideVotePreview: !!opts.hidePreview,
+                            expiredTime,
+                        },
+                        groupId,
+                    );
+                    output(result, program.opts().json, () => {
+                        success(`Poll created: "${question}"`);
+                        info(`Poll ID: ${result.poll_id}`);
+                        if (result.options) {
+                            result.options.forEach((o) => console.log(`  [${o.option_id}] ${o.content}`));
+                        }
+                    });
+                } catch (e) {
+                    error(`Create poll failed: ${errorMessage(e)}`);
+                }
+            },
+        );
 
     poll.command("info <pollId>")
         .description("View poll details and results")
-        .action(async (pollId) => {
+        .action(async (pollId: string) => {
             try {
                 const result = await getApi().getPollDetail(Number(pollId));
                 output(result, program.opts().json, () => {
@@ -73,13 +88,13 @@ export function registerPollCommands(program) {
                     }
                 });
             } catch (e) {
-                error(`Get poll failed: ${e.message}`);
+                error(`Get poll failed: ${errorMessage(e)}`);
             }
         });
 
     poll.command("vote <pollId> <optionIds...>")
         .description("Vote on a poll (use option IDs from 'poll info')")
-        .action(async (pollId, optionIds) => {
+        .action(async (pollId: string, optionIds: string[]) => {
             try {
                 const ids = optionIds.map(Number);
                 const result = await getApi().votePoll(Number(pollId), ids);
@@ -93,25 +108,25 @@ export function registerPollCommands(program) {
                     }
                 });
             } catch (e) {
-                error(`Vote failed: ${e.message}`);
+                error(`Vote failed: ${errorMessage(e)}`);
             }
         });
 
     poll.command("unvote <pollId>")
         .description("Remove your vote from a poll")
-        .action(async (pollId) => {
+        .action(async (pollId: string) => {
             try {
                 const result = await getApi().votePoll(Number(pollId), []);
                 output(result, program.opts().json, () => success(`Removed vote from poll ${pollId}`));
             } catch (e) {
-                error(`Unvote failed: ${e.message}`);
+                error(`Unvote failed: ${errorMessage(e)}`);
             }
         });
 
     poll.command("add-option <pollId> <options...>")
         .description("Add new options to an existing poll")
         .option("--vote", "Also vote for the new options")
-        .action(async (pollId, options, opts) => {
+        .action(async (pollId: string, options: string[], opts: { vote?: boolean }) => {
             try {
                 const newOptions = options.map((content) => ({
                     content,
@@ -131,29 +146,29 @@ export function registerPollCommands(program) {
                     }
                 });
             } catch (e) {
-                error(`Add option failed: ${e.message}`);
+                error(`Add option failed: ${errorMessage(e)}`);
             }
         });
 
     poll.command("lock <pollId>")
         .description("Lock/close a poll (no more votes)")
-        .action(async (pollId) => {
+        .action(async (pollId: string) => {
             try {
                 const result = await getApi().lockPoll(Number(pollId));
                 output(result, program.opts().json, () => success(`Poll ${pollId} locked`));
             } catch (e) {
-                error(`Lock poll failed: ${e.message}`);
+                error(`Lock poll failed: ${errorMessage(e)}`);
             }
         });
 
     poll.command("share <pollId>")
         .description("Share a poll")
-        .action(async (pollId) => {
+        .action(async (pollId: string) => {
             try {
                 const result = await getApi().sharePoll(Number(pollId));
                 output(result, program.opts().json, () => success(`Poll ${pollId} shared`));
             } catch (e) {
-                error(`Share poll failed: ${e.message}`);
+                error(`Share poll failed: ${errorMessage(e)}`);
             }
         });
 }

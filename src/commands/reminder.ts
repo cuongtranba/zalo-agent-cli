@@ -2,15 +2,18 @@
  * Reminder commands — create, list, info, edit, remove reminders in users/groups.
  */
 
+import type { Command } from "commander";
+import type { EditReminderOptions } from "zca-js";
 import { getApi } from "../core/zalo-client.ts";
 import { success, error, info, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
 /** Repeat mode labels matching zca-js ReminderRepeatMode enum. */
-const REPEAT_MODES = { none: 0, daily: 1, weekly: 2, monthly: 3 };
-const REPEAT_LABELS = { 0: "None", 1: "Daily", 2: "Weekly", 3: "Monthly" };
+const REPEAT_MODES: Record<string, number> = { none: 0, daily: 1, weekly: 2, monthly: 3 };
+const REPEAT_LABELS: Record<number, string> = { 0: "None", 1: "Daily", 2: "Weekly", 3: "Monthly" };
 
 /** Parse a datetime string into Unix timestamp (ms). Accepts ISO or "YYYY-MM-DD HH:mm". */
-function parseTime(str) {
+function parseTime(str: string): number | null {
     // Try "YYYY-MM-DD HH:mm" format
     const match = str.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
     if (match) {
@@ -23,7 +26,7 @@ function parseTime(str) {
     return ts;
 }
 
-export function registerReminderCommands(program) {
+export function registerReminderCommands(program: Command): void {
     const reminder = program.command("reminder").description("Create and manage reminders in users/groups");
 
     reminder
@@ -33,44 +36,53 @@ export function registerReminderCommands(program) {
         .option("--time <datetime>", 'Reminder time: "YYYY-MM-DD HH:mm" (default: now)')
         .option("--emoji <emoji>", "Emoji icon", "⏰")
         .option("--repeat <mode>", "Repeat: none, daily, weekly, monthly", "none")
-        .action(async (threadId, title, opts) => {
-            try {
-                const repeatMode = REPEAT_MODES[opts.repeat];
-                if (repeatMode === undefined) {
-                    error(`Invalid repeat mode: "${opts.repeat}". Valid: none, daily, weekly, monthly`);
-                    return;
-                }
-                let startTime = Date.now();
-                if (opts.time) {
-                    startTime = parseTime(opts.time);
-                    if (!startTime) {
-                        error(`Invalid time format: "${opts.time}". Use "YYYY-MM-DD HH:mm" or ISO format.`);
+        .action(
+            async (
+                threadId: string,
+                title: string,
+                opts: { type: string; time?: string; emoji: string; repeat: string },
+            ) => {
+                try {
+                    const repeatMode = REPEAT_MODES[opts.repeat];
+                    if (repeatMode === undefined) {
+                        error(`Invalid repeat mode: "${opts.repeat}". Valid: none, daily, weekly, monthly`);
                         return;
                     }
+                    let startTime = Date.now();
+                    if (opts.time) {
+                        const parsed = parseTime(opts.time);
+                        if (!parsed) {
+                            error(`Invalid time format: "${opts.time}". Use "YYYY-MM-DD HH:mm" or ISO format.`);
+                            return;
+                        }
+                        startTime = parsed;
+                    }
+                    const result = await getApi().createReminder(
+                        { title, emoji: opts.emoji, startTime, repeat: repeatMode },
+                        threadId,
+                        Number(opts.type),
+                    );
+                    output(result, program.opts().json, () => {
+                        success(`Reminder created: "${title}"`);
+                        // The response type does not declare the reminder id; Zalo has returned it as reminderId or id
+                        const created = result as { reminderId?: string; id?: string };
+                        const id = created.reminderId || created.id || "?";
+                        info(`Reminder ID: ${id}`);
+                        info(`Time: ${new Date(startTime).toLocaleString()}`);
+                        if (repeatMode > 0) info(`Repeat: ${REPEAT_LABELS[repeatMode]}`);
+                    });
+                } catch (e) {
+                    error(`Create reminder failed: ${errorMessage(e)}`);
                 }
-                const result = await getApi().createReminder(
-                    { title, emoji: opts.emoji, startTime, repeat: repeatMode },
-                    threadId,
-                    Number(opts.type),
-                );
-                output(result, program.opts().json, () => {
-                    success(`Reminder created: "${title}"`);
-                    const id = result.reminderId || result.id || "?";
-                    info(`Reminder ID: ${id}`);
-                    info(`Time: ${new Date(startTime).toLocaleString()}`);
-                    if (repeatMode > 0) info(`Repeat: ${REPEAT_LABELS[repeatMode]}`);
-                });
-            } catch (e) {
-                error(`Create reminder failed: ${e.message}`);
-            }
-        });
+            },
+        );
 
     reminder
         .command("list <threadId>")
         .description("List reminders in a thread")
         .option("-t, --type <n>", "Thread type: 0=User, 1=Group", "0")
         .option("-n, --count <n>", "Max results", "20")
-        .action(async (threadId, opts) => {
+        .action(async (threadId: string, opts: { type: string; count: string }) => {
             try {
                 let result;
                 try {
@@ -97,14 +109,14 @@ export function registerReminderCommands(program) {
                     }
                 });
             } catch (e) {
-                error(`List reminders failed: ${e.message}`);
+                error(`List reminders failed: ${errorMessage(e)}`);
             }
         });
 
     reminder
         .command("info <reminderId>")
         .description("View reminder details (group reminders only)")
-        .action(async (reminderId) => {
+        .action(async (reminderId: string) => {
             try {
                 const result = await getApi().getReminder(reminderId);
                 output(result, program.opts().json, () => {
@@ -123,14 +135,14 @@ export function registerReminderCommands(program) {
                     }
                 });
             } catch (e) {
-                error(`Get reminder failed: ${e.message}`);
+                error(`Get reminder failed: ${errorMessage(e)}`);
             }
         });
 
     reminder
         .command("responses <reminderId>")
         .description("View who accepted/rejected a reminder (group only)")
-        .action(async (reminderId) => {
+        .action(async (reminderId: string) => {
             try {
                 const result = await getApi().getReminderResponses(reminderId);
                 output(result, program.opts().json, () => {
@@ -142,7 +154,7 @@ export function registerReminderCommands(program) {
                     rejected.forEach((uid) => console.log(`  ✗ ${uid}`));
                 });
             } catch (e) {
-                error(`Get responses failed: ${e.message}`);
+                error(`Get responses failed: ${errorMessage(e)}`);
             }
         });
 
@@ -153,43 +165,50 @@ export function registerReminderCommands(program) {
         .option("--time <datetime>", 'New time: "YYYY-MM-DD HH:mm"')
         .option("--emoji <emoji>", "New emoji icon")
         .option("--repeat <mode>", "Repeat: none, daily, weekly, monthly")
-        .action(async (reminderId, threadId, title, opts) => {
-            try {
-                const editOpts = { title, topicId: reminderId };
-                if (opts.emoji) editOpts.emoji = opts.emoji;
-                if (opts.time) {
-                    const ts = parseTime(opts.time);
-                    if (!ts) {
-                        error(`Invalid time format: "${opts.time}". Use "YYYY-MM-DD HH:mm".`);
-                        return;
+        .action(
+            async (
+                reminderId: string,
+                threadId: string,
+                title: string,
+                opts: { type: string; time?: string; emoji?: string; repeat?: string },
+            ) => {
+                try {
+                    const editOpts: EditReminderOptions = { title, topicId: reminderId };
+                    if (opts.emoji) editOpts.emoji = opts.emoji;
+                    if (opts.time) {
+                        const ts = parseTime(opts.time);
+                        if (!ts) {
+                            error(`Invalid time format: "${opts.time}". Use "YYYY-MM-DD HH:mm".`);
+                            return;
+                        }
+                        editOpts.startTime = ts;
                     }
-                    editOpts.startTime = ts;
-                }
-                if (opts.repeat) {
-                    const mode = REPEAT_MODES[opts.repeat];
-                    if (mode === undefined) {
-                        error(`Invalid repeat mode: "${opts.repeat}". Valid: none, daily, weekly, monthly`);
-                        return;
+                    if (opts.repeat) {
+                        const mode = REPEAT_MODES[opts.repeat];
+                        if (mode === undefined) {
+                            error(`Invalid repeat mode: "${opts.repeat}". Valid: none, daily, weekly, monthly`);
+                            return;
+                        }
+                        editOpts.repeat = mode;
                     }
-                    editOpts.repeat = mode;
+                    const result = await getApi().editReminder(editOpts, threadId, Number(opts.type));
+                    output(result, program.opts().json, () => success(`Reminder ${reminderId} updated`));
+                } catch (e) {
+                    error(`Edit reminder failed: ${errorMessage(e)}`);
                 }
-                const result = await getApi().editReminder(editOpts, threadId, Number(opts.type));
-                output(result, program.opts().json, () => success(`Reminder ${reminderId} updated`));
-            } catch (e) {
-                error(`Edit reminder failed: ${e.message}`);
-            }
-        });
+            },
+        );
 
     reminder
         .command("remove <reminderId> <threadId>")
         .description("Remove a reminder")
         .option("-t, --type <n>", "Thread type: 0=User, 1=Group", "0")
-        .action(async (reminderId, threadId, opts) => {
+        .action(async (reminderId: string, threadId: string, opts: { type: string }) => {
             try {
                 const result = await getApi().removeReminder(reminderId, threadId, Number(opts.type));
                 output(result, program.opts().json, () => success(`Reminder ${reminderId} removed`));
             } catch (e) {
-                error(`Remove reminder failed: ${e.message}`);
+                error(`Remove reminder failed: ${errorMessage(e)}`);
             }
         });
 }

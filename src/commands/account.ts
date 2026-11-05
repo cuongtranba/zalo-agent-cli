@@ -3,6 +3,7 @@
  * Includes export for headless/CI credential transfer.
  */
 
+import type { Command } from "commander";
 import { writeFileSync, chmodSync } from "fs";
 import { resolve } from "path";
 import { loginWithQR, loginWithCredentials, extractCredentials, clearSession } from "../core/zalo-client.ts";
@@ -12,8 +13,9 @@ import { maskProxy } from "../utils/proxy-helpers.ts";
 import { displayQR, getQRPath } from "../utils/qr-display.ts";
 import { startQrServer } from "../utils/qr-http-server.ts";
 import { success, error, info, warning, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
-export function registerAccountCommands(program) {
+export function registerAccountCommands(program: Command): void {
     const account = program.command("account").description("Manage multiple Zalo accounts with proxy");
 
     account
@@ -44,11 +46,12 @@ export function registerAccountCommands(program) {
         .option("-p, --proxy <url>", "Dedicated proxy URL for this account")
         .option("-n, --name <label>", "Friendly label", "")
         .option("--qr-url", "Start local HTTP server to view QR in browser (for VPS/headless)")
-        .action(async (opts) => {
+        .action(async (opts: { proxy?: string; name: string; qrUrl?: boolean }) => {
             if (opts.proxy) info(`Using proxy: ${maskProxy(opts.proxy)}`);
             info("Generating QR code... Scan with Zalo mobile app.");
 
-            let qrServer = null;
+            // Assigned inside the QR callback, which TypeScript cannot see
+            let qrServer = null as ReturnType<typeof startQrServer> | null;
             try {
                 const { ownId } = await loginWithQR(opts.proxy, (event) => {
                     displayQR(event);
@@ -72,7 +75,7 @@ export function registerAccountCommands(program) {
                     `Account logged in: ${displayName} (${ownId})${opts.proxy ? ` via ${maskProxy(opts.proxy)}` : ""}`,
                 );
             } catch (e) {
-                error(`Login failed: ${e.message}`);
+                error(`Login failed: ${errorMessage(e)}`);
             } finally {
                 if (qrServer) qrServer.close();
             }
@@ -81,7 +84,7 @@ export function registerAccountCommands(program) {
     account
         .command("switch <ownerId>")
         .description("Switch active account (restarts connection with account proxy)")
-        .action(async (ownerId) => {
+        .action(async (ownerId: string) => {
             let acc = getAccount(ownerId);
             if (!acc) {
                 const all = listAccounts();
@@ -110,14 +113,14 @@ export function registerAccountCommands(program) {
                 setActive(ownerId);
                 success(`Switched to ${ownerId}`);
             } catch (e) {
-                error(`Switch failed: ${e.message}`);
+                error(`Switch failed: ${errorMessage(e)}`);
             }
         });
 
     account
         .command("remove <ownerId>")
         .description("Remove account and delete its credentials")
-        .action((ownerId) => {
+        .action((ownerId: string) => {
             if (removeAccount(ownerId)) {
                 success(`Account ${ownerId} removed`);
             } else {
@@ -147,7 +150,7 @@ export function registerAccountCommands(program) {
         .command("export [ownerId]")
         .description("Export account credentials for transfer to another machine")
         .option("-o, --output <path>", "Output file path", "./zalo-creds.json")
-        .action((ownerId, opts) => {
+        .action((ownerId: string | undefined, opts: { output: string }) => {
             const acc = ownerId ? getAccount(ownerId) : getActive();
             if (!acc) {
                 error("No account found to export.");

@@ -12,7 +12,15 @@ import { randomUUID, timingSafeEqual } from "crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
-import { parseDuration } from "./mcp-config.ts";
+import type { Server } from "http";
+import type { API } from "zca-js";
+import type { Request, Response } from "express";
+import type { MessageBuffer } from "./message-buffer.ts";
+import type { ThreadFilter } from "./thread-filter.ts";
+import type { ThreadNameCache } from "./thread-name-cache.ts";
+import type { InboxSubscribers } from "./mcp-resources.ts";
+import type { RegisterServerFn } from "./mcp-setup.ts";
+import { parseDuration, type MCPServerConfig } from "./mcp-config.ts";
 import pkg from "../../package.json" with { type: "json" };
 
 /** Hosts that are safe to serve without an auth token */
@@ -22,17 +30,36 @@ const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_SWEEP_INTERVAL_MS = 60 * 1000;
 const MIN_SWEEP_INTERVAL_MS = 50;
 
+export interface HTTPServerDeps {
+    getApi: () => API;
+    buffer: MessageBuffer;
+    filter: ThreadFilter;
+    config: MCPServerConfig;
+    nameCache?: ThreadNameCache;
+    inboxSubscribers?: InboxSubscribers;
+}
+
+interface HTTPSession {
+    transport: StreamableHTTPServerTransport;
+    server: McpServer;
+    openRequests: number;
+    lastActivity: number;
+}
+
 /**
  * Create HTTP MCP server with optional bearer token auth.
- * @param {Function} registerServerFn - Registers tools and resources on a McpServer instance
- * @param {object} deps - { getApi, buffer, filter, config, nameCache, inboxSubscribers }
- * @param {number} port
- * @param {string|null} authToken - Bearer token (null = no auth, loopback host only)
- * @param {string} [host] - Bind address
- * @returns {import("http").Server}
+ * @param registerServerFn - Registers tools and resources on a McpServer instance
+ * @param authToken - Bearer token (null = no auth, loopback host only)
+ * @param host - Bind address
  * @throws {Error} When no authToken is set and host is not a loopback address
  */
-export function createHTTPServer(registerServerFn, deps, port, authToken, host = "127.0.0.1") {
+export function createHTTPServer(
+    registerServerFn: RegisterServerFn,
+    deps: HTTPServerDeps,
+    port: number,
+    authToken: string | null,
+    host = "127.0.0.1",
+): Server {
     if (!authToken && !LOOPBACK_HOSTS.has(host)) {
         throw new Error(`Refusing to listen on ${host} without --auth: set a bearer token or bind to 127.0.0.1`);
     }
@@ -57,27 +84,27 @@ export function createHTTPServer(registerServerFn, deps, port, authToken, host =
     /**
      * openRequests counts in-flight HTTP requests (the long-lived GET stream included); lastActivity is the
      * time a request last started or finished. Only sessions with no open request can expire.
-     * @type {Map<string, { transport: StreamableHTTPServerTransport, server: McpServer, openRequests: number, lastActivity: number }>}
      */
-    const sessions = new Map();
+    const sessions = new Map<string, HTTPSession>();
     const idleTimeoutMs = parseDuration(deps.config?.limits?.sessionIdleTimeout ?? "30m") || DEFAULT_IDLE_TIMEOUT_MS;
 
-    const jsonRpcError = (res, status, code, message) =>
+    const jsonRpcError = (res: Response, status: number, code: number, message: string) =>
         res.status(status).json({ jsonrpc: "2.0", error: { code, message }, id: null });
 
     /** Create a server+transport pair for a new session; registered in `sessions` once initialized */
-    const createSession = async () => {
+    const createSession = async (): Promise<HTTPSession> => {
         const server = new McpServer({ name: "zalo-agent", version: pkg.version });
         registerServerFn(server, deps.getApi, deps.buffer, deps.filter, deps.config, deps.nameCache, {
             inboxSubscribers: deps.inboxSubscribers,
         });
 
-        const session = { transport: null, server, openRequests: 0, lastActivity: Date.now() };
         const transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
-            onsessioninitialized: (sessionId) => sessions.set(sessionId, session),
+            onsessioninitialized: (sessionId) => {
+                sessions.set(sessionId, session);
+            },
         });
-        session.transport = transport;
+        const session: HTTPSession = { transport, server, openRequests: 0, lastActivity: Date.now() };
         transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
             server.close().catch(() => {});
@@ -88,7 +115,7 @@ export function createHTTPServer(registerServerFn, deps, port, authToken, host =
     };
 
     /** Route one request to a session, keeping its activity bookkeeping current until the response closes */
-    const handleSessionRequest = (session, req, res) => {
+    const handleSessionRequest = (session: HTTPSession, req: Request, res: Response) => {
         session.openRequests++;
         session.lastActivity = Date.now();
         res.on("close", () => {
@@ -108,7 +135,7 @@ export function createHTTPServer(registerServerFn, deps, port, authToken, host =
 
             const sessionId = req.headers["mcp-session-id"];
             if (sessionId) {
-                const session = sessions.get(sessionId);
+                const session = sessions.get(String(sessionId));
                 if (!session) return jsonRpcError(res, 404, -32001, "Session not found");
                 return await handleSessionRequest(session, req, res);
             }
@@ -124,7 +151,7 @@ export function createHTTPServer(registerServerFn, deps, port, authToken, host =
     });
 
     // Health check — no auth required
-    app.get("/health", (req, res) => {
+    app.get("/health", (_req, res) => {
         res.json({
             status: "ok",
             uptime: Math.floor(process.uptime()),

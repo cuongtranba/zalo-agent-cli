@@ -10,16 +10,16 @@ const LATEST_URL = "https://registry.npmjs.org/zalo-agent-cli/latest";
 
 /**
  * Check npm registry for latest version, warn if outdated.
- * @param {string} currentVersion - Current package version
+ * @param currentVersion - Current package version
  * @param {boolean} jsonMode - Suppress output in JSON mode
  */
-export async function checkForUpdates(currentVersion, jsonMode) {
+export async function checkForUpdates(currentVersion: string, jsonMode: boolean | undefined): Promise<void> {
     if (jsonMode) return;
 
     try {
         const res = await fetch(LATEST_URL, { signal: AbortSignal.timeout(5000) });
         if (!res.ok) return;
-        const { version: latest } = await res.json();
+        const { version: latest } = (await res.json()) as { version?: string };
 
         if (latest && latest !== currentVersion) {
             warning(`Update available: ${currentVersion} → ${latest}. Run: zalo-agent update`);
@@ -33,7 +33,7 @@ export async function checkForUpdates(currentVersion, jsonMode) {
  * Self-update by running `bun add -g zalo-agent-cli@latest`.
  * @returns {Promise<boolean>} success
  */
-export function selfUpdate() {
+export function selfUpdate(): Promise<boolean> {
     return new Promise((resolve) => {
         const child = spawn("bun", ["add", "-g", "zalo-agent-cli@latest"], { stdio: "inherit", timeout: 60000 });
         child.on("error", () => resolve(false));

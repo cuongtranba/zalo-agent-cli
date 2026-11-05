@@ -3,6 +3,7 @@
  * Independent from zca-js personal account; uses separate OA access token.
  */
 
+import type { Command } from "commander";
 import { resolve } from "node:path";
 import { registerOAListenCommand } from "./oa-listen.ts";
 import { registerOAInitCommand } from "./oa-init.ts";
@@ -41,9 +42,10 @@ import {
     getCategoryList,
     createOrder,
 } from "../core/oa-client.ts";
-import { success, error, info, output } from "../utils/output.ts";
+import { success, error, info, warning, output } from "../utils/output.ts";
+import { errorMessage } from "../utils/error-message.ts";
 
-export function registerOACommands(program) {
+export function registerOACommands(program: Command): void {
     const oa = program.command("oa").description("Zalo Official Account API v3.0 commands");
     const json = () => program.opts().json;
 
@@ -56,7 +58,7 @@ export function registerOACommands(program) {
         .option("-p, --port <port>", "Callback server port", "3456")
         .option("--callback-host <host>", "Callback host for VPS (e.g. https://your-vps.com)")
         .option("--oa-id <id>", "OA identifier for multi-OA support", "default")
-        .action(async (opts) => {
+        .action(async (opts: { appId: string; secret: string; port: string; callbackHost?: string; oaId: string }) => {
             const { createServer } = await import("node:http");
             const callbackBase = opts.callbackHost || `http://localhost:${opts.port}`;
             const redirectUri = `${callbackBase}/callback`;
@@ -128,13 +130,13 @@ export function registerOACommands(program) {
                     output({ ok: true, oaId: oaId || opts.oaId, expires_in: tokenData.expires_in }, json(), () => {
                         success(`OA logged in successfully (OA ID: ${oaId || opts.oaId})`);
                         info(
-                            `Token expires in ${Math.round((tokenData.expires_in || 86400) / 3600)}h — use 'oa refresh' to renew`,
+                            `Token expires in ${Math.round(Number(tokenData.expires_in || 86400) / 3600)}h — use 'oa refresh' to renew`,
                         );
                     });
                 } catch (e) {
                     res.writeHead(500, { "Content-Type": "text/html; charset=utf-8" });
-                    res.end(`<h2>Login failed</h2><p>${e.message}</p>`);
-                    error(e.message);
+                    res.end(`<h2>Login failed</h2><p>${errorMessage(e)}</p>`);
+                    error(errorMessage(e));
                 } finally {
                     server.close();
                 }
@@ -157,7 +159,7 @@ export function registerOACommands(program) {
     oa.command("refresh")
         .description("Refresh OA access token using stored refresh token")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { oaId: string }) => {
             try {
                 const creds = loadOACreds(opts.oaId);
                 if (!creds?.refreshToken || !creds?.appId || !creds?.secretKey) {
@@ -178,29 +180,29 @@ export function registerOACommands(program) {
                     opts.oaId,
                 );
                 output({ ok: true, expires_in: tokenData.expires_in }, json(), () =>
-                    success(`Token refreshed. Expires in ${Math.round((tokenData.expires_in || 86400) / 3600)}h`),
+                    success(`Token refreshed. Expires in ${Math.round(Number(tokenData.expires_in || 86400) / 3600)}h`),
                 );
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     oa.command("setup <access-token>")
         .description("Manually set OA access token (skip OAuth)")
         .option("--oa-id <id>", "OA identifier for multi-OA support", "default")
-        .action(async (accessToken, opts) => {
+        .action(async (accessToken: string, opts: { oaId: string }) => {
             try {
                 saveOAToken(accessToken, opts.oaId);
                 output({ ok: true, oaId: opts.oaId }, json(), () => success(`OA token saved for "${opts.oaId}"`));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     oa.command("whoami")
         .description("Show current OA profile info")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { oaId: string }) => {
             try {
                 const result = await getOAProfile(opts.oaId);
                 output(result, json(), () => {
@@ -210,7 +212,7 @@ export function registerOACommands(program) {
                     if (d.num_follower !== null && d.num_follower !== undefined) info(`Followers: ${d.num_follower}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -222,12 +224,12 @@ export function registerOACommands(program) {
         .description("Send text message to a follower")
         .option("-m, --msg-type <type>", "Message type: cs | transaction | promotion", "cs")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, text, opts) => {
+        .action(async (userId: string, text: string, opts: { msgType: string; oaId: string }) => {
             try {
                 const result = await sendText(userId, text, opts.msgType, opts.oaId);
                 output(result, json(), () => success("Text message sent"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -237,30 +239,32 @@ export function registerOACommands(program) {
         .option("--image-id <id>", "Pre-uploaded image attachment_id")
         .option("-m, --msg-type <type>", "Message type: cs | transaction | promotion", "cs")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, opts) => {
-            try {
-                const result = await sendImage(
-                    userId,
-                    { imageUrl: opts.imageUrl, imageId: opts.imageId },
-                    opts.msgType,
-                    opts.oaId,
-                );
-                output(result, json(), () => success("Image message sent"));
-            } catch (e) {
-                error(e.message);
-            }
-        });
+        .action(
+            async (userId: string, opts: { imageUrl?: string; imageId?: string; msgType: string; oaId: string }) => {
+                try {
+                    const result = await sendImage(
+                        userId,
+                        { imageUrl: opts.imageUrl, imageId: opts.imageId },
+                        opts.msgType,
+                        opts.oaId,
+                    );
+                    output(result, json(), () => success("Image message sent"));
+                } catch (e) {
+                    error(errorMessage(e));
+                }
+            },
+        );
 
     msg.command("file <user-id> <file-id>")
         .description("Send file message (requires pre-uploaded file token)")
         .option("-m, --msg-type <type>", "Message type: cs | transaction | promotion", "cs")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, fileId, opts) => {
+        .action(async (userId: string, fileId: string, opts: { msgType: string; oaId: string }) => {
             try {
                 const result = await sendFile(userId, fileId, opts.msgType, opts.oaId);
                 output(result, json(), () => success("File message sent"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -268,20 +272,20 @@ export function registerOACommands(program) {
         .description('Send list message. elements-json: \'[{"title":"...", "subtitle":"..."}]\'')
         .option("-m, --msg-type <type>", "Message type: cs | transaction | promotion", "cs")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, elementsJson, opts) => {
+        .action(async (userId: string, elementsJson: string, opts: { msgType: string; oaId: string }) => {
             try {
                 const elements = JSON.parse(elementsJson);
                 const result = await sendList(userId, elements, opts.msgType, opts.oaId);
                 output(result, json(), () => success("List message sent"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     msg.command("status <message-id>")
         .description("Check message delivery status")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (messageId, opts) => {
+        .action(async (messageId: string, opts: { oaId: string }) => {
             try {
                 const result = await getMessageStatus(messageId, opts.oaId);
                 output(result, json(), () => {
@@ -289,7 +293,7 @@ export function registerOACommands(program) {
                     info(`Status: ${d.status || JSON.stringify(d)}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -301,7 +305,7 @@ export function registerOACommands(program) {
         .command("info <user-id>")
         .description("Get follower details")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, opts) => {
+        .action(async (userId: string, opts: { oaId: string }) => {
             try {
                 const result = await getFollowerInfo(userId, opts.oaId);
                 output(result, json(), () => {
@@ -311,7 +315,7 @@ export function registerOACommands(program) {
                     if (d.user_id_by_app) info(`App User ID: ${d.user_id_by_app}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -321,17 +325,17 @@ export function registerOACommands(program) {
         .option("--offset <n>", "Offset", "0")
         .option("--count <n>", "Count per page", "50")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { offset: string; count: string; oaId: string }) => {
             try {
                 const result = await getFollowers(Number(opts.offset), Number(opts.count), opts.oaId);
                 output(result, json(), () => {
                     const d = result.data || result;
-                    const users = d.users || d.followers || [];
+                    const users: Array<{ user_id: string; display_name?: string }> = d.users || d.followers || [];
                     info(`Followers: ${d.total || users.length}`);
                     users.forEach((u) => console.log(`  - ${u.user_id}: ${u.display_name || "N/A"}`));
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -339,13 +343,13 @@ export function registerOACommands(program) {
         .command("update <user-id> <updates-json>")
         .description('Update follower info. updates-json: \'{"name":"...","phone":"..."}\'')
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, updatesJson, opts) => {
+        .action(async (userId: string, updatesJson: string, opts: { oaId: string }) => {
             try {
                 const updates = JSON.parse(updatesJson);
                 const result = await updateFollowerInfo(userId, updates, opts.oaId);
                 output(result, json(), () => success("Follower info updated"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -356,52 +360,52 @@ export function registerOACommands(program) {
     tag.command("list")
         .description("List all tags")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { oaId: string }) => {
             try {
                 const result = await getTags(opts.oaId);
                 output(result, json(), () => {
-                    const tags = result.data?.tags || result.tags || [];
+                    const tags: Array<{ name: string; count?: number }> = result.data?.tags || result.tags || [];
                     info(`Tags (${tags.length}):`);
                     tags.forEach((t) => console.log(`  - ${t.name} (${t.count || 0} followers)`));
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     tag.command("assign <user-id> <tag-name>")
         .description("Assign tag to a follower")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, tagName, opts) => {
+        .action(async (userId: string, tagName: string, opts: { oaId: string }) => {
             try {
                 const result = await assignTag(userId, tagName, opts.oaId);
                 output(result, json(), () => success(`Tag "${tagName}" assigned`));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     tag.command("remove <tag-name>")
         .description("Delete a tag")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (tagName, opts) => {
+        .action(async (tagName: string, opts: { oaId: string }) => {
             try {
                 const result = await removeTag(tagName, opts.oaId);
                 output(result, json(), () => success(`Tag "${tagName}" removed`));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
     tag.command("untag <user-id> <tag-name>")
         .description("Remove follower from a tag")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, tagName, opts) => {
+        .action(async (userId: string, tagName: string, opts: { oaId: string }) => {
             try {
                 const result = await removeFollowerFromTag(userId, tagName, opts.oaId);
                 output(result, json(), () => success(`Removed "${tagName}" from user`));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -413,7 +417,7 @@ export function registerOACommands(program) {
         .command("image <file-path>")
         .description("Upload image (returns attachment_id for sending)")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (filePath, opts) => {
+        .action(async (filePath: string, opts: { oaId: string }) => {
             try {
                 const result = await uploadImage(resolve(filePath), opts.oaId);
                 output(result, json(), () => {
@@ -421,7 +425,7 @@ export function registerOACommands(program) {
                     success(`Image uploaded: ${d.attachment_id || JSON.stringify(d)}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -429,7 +433,7 @@ export function registerOACommands(program) {
         .command("file <file-path>")
         .description("Upload file (returns token for sending)")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (filePath, opts) => {
+        .action(async (filePath: string, opts: { oaId: string }) => {
             try {
                 const result = await uploadFile(resolve(filePath), opts.oaId);
                 output(result, json(), () => {
@@ -437,7 +441,7 @@ export function registerOACommands(program) {
                     success(`File uploaded: ${d.token || JSON.stringify(d)}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -450,7 +454,7 @@ export function registerOACommands(program) {
         .option("--offset <n>", "Offset", "0")
         .option("--count <n>", "Count", "10")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { offset: string; count: string; oaId: string }) => {
             try {
                 const result = await getRecentChat(Number(opts.offset), Number(opts.count), opts.oaId);
                 output(result, json(), () => {
@@ -458,7 +462,7 @@ export function registerOACommands(program) {
                     info(`Recent conversations: ${Array.isArray(chats) ? chats.length : "see JSON"}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -467,7 +471,7 @@ export function registerOACommands(program) {
         .option("--offset <n>", "Offset", "0")
         .option("--count <n>", "Count", "10")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (userId, opts) => {
+        .action(async (userId: string, opts: { offset: string; count: string; oaId: string }) => {
             try {
                 const result = await getConversation(userId, Number(opts.offset), Number(opts.count), opts.oaId);
                 output(result, json(), () => {
@@ -475,7 +479,7 @@ export function registerOACommands(program) {
                     info(`Messages: ${Array.isArray(msgs) ? msgs.length : "see JSON"}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -484,13 +488,13 @@ export function registerOACommands(program) {
     oa.command("menu <menu-json>")
         .description("Update OA menu. menu-json: '{\"buttons\":[...]}'")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (menuJson, opts) => {
+        .action(async (menuJson: string, opts: { oaId: string }) => {
             try {
                 const menuData = JSON.parse(menuJson);
                 const result = await updateMenu(menuData, opts.oaId);
                 output(result, json(), () => success("OA menu updated"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -502,13 +506,13 @@ export function registerOACommands(program) {
         .command("create <article-json>")
         .description("Create article (broadcast)")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (articleJson, opts) => {
+        .action(async (articleJson: string, opts: { oaId: string }) => {
             try {
                 const data = JSON.parse(articleJson);
                 const result = await createArticle(data, opts.oaId);
                 output(result, json(), () => success("Article created"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -518,16 +522,16 @@ export function registerOACommands(program) {
         .option("--offset <n>", "Offset", "0")
         .option("--limit <n>", "Limit", "10")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { offset: string; limit: string; oaId: string }) => {
             try {
                 const result = await getArticleList(Number(opts.offset), Number(opts.limit), opts.oaId);
                 output(result, json(), () => {
-                    const articles = result.data?.articles || [];
+                    const articles: Array<{ id: string; title?: string }> = result.data?.articles || [];
                     info(`Articles: ${articles.length}`);
                     articles.forEach((a) => console.log(`  - ${a.id}: ${a.title || "N/A"}`));
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -535,7 +539,7 @@ export function registerOACommands(program) {
         .command("detail <article-id>")
         .description("Get article details")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (articleId, opts) => {
+        .action(async (articleId: string, opts: { oaId: string }) => {
             try {
                 const result = await getArticleDetail(articleId, opts.oaId);
                 output(result, json(), () => {
@@ -544,7 +548,7 @@ export function registerOACommands(program) {
                     if (d.status) info(`Status: ${d.status}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -556,13 +560,13 @@ export function registerOACommands(program) {
         .command("product-create <product-json>")
         .description("Create product in OA store")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (productJson, opts) => {
+        .action(async (productJson: string, opts: { oaId: string }) => {
             try {
                 const data = JSON.parse(productJson);
                 const result = await createProduct(data, opts.oaId);
                 output(result, json(), () => success("Product created"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -572,16 +576,16 @@ export function registerOACommands(program) {
         .option("--offset <n>", "Offset", "0")
         .option("--limit <n>", "Limit", "10")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { offset: string; limit: string; oaId: string }) => {
             try {
                 const result = await getProductList(Number(opts.offset), Number(opts.limit), opts.oaId);
                 output(result, json(), () => {
-                    const products = result.data?.products || [];
+                    const products: Array<{ id: string; name?: string }> = result.data?.products || [];
                     info(`Products: ${products.length}`);
                     products.forEach((p) => console.log(`  - ${p.id}: ${p.name || "N/A"}`));
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -589,7 +593,7 @@ export function registerOACommands(program) {
         .command("product-info <product-id>")
         .description("Get product details")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (productId, opts) => {
+        .action(async (productId: string, opts: { oaId: string }) => {
             try {
                 const result = await getProductInfo(productId, opts.oaId);
                 output(result, json(), () => {
@@ -597,7 +601,7 @@ export function registerOACommands(program) {
                     info(`Product: ${d.name || "N/A"} — ${d.price || "N/A"}`);
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -605,13 +609,13 @@ export function registerOACommands(program) {
         .command("category-create <category-json>")
         .description("Create store category")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (categoryJson, opts) => {
+        .action(async (categoryJson: string, opts: { oaId: string }) => {
             try {
                 const data = JSON.parse(categoryJson);
                 const result = await createCategory(data, opts.oaId);
                 output(result, json(), () => success("Category created"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -619,16 +623,16 @@ export function registerOACommands(program) {
         .command("category-list")
         .description("List store categories")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (opts) => {
+        .action(async (opts: { oaId: string }) => {
             try {
                 const result = await getCategoryList(opts.oaId);
                 output(result, json(), () => {
-                    const cats = result.data?.categories || [];
+                    const cats: Array<{ id: string; name?: string }> = result.data?.categories || [];
                     info(`Categories: ${cats.length}`);
                     cats.forEach((c) => console.log(`  - ${c.id}: ${c.name || "N/A"}`));
                 });
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 
@@ -636,13 +640,13 @@ export function registerOACommands(program) {
         .command("order-create <order-json>")
         .description("Create order")
         .option("--oa-id <id>", "OA identifier", "default")
-        .action(async (orderJson, opts) => {
+        .action(async (orderJson: string, opts: { oaId: string }) => {
             try {
                 const data = JSON.parse(orderJson);
                 const result = await createOrder(data, opts.oaId);
                 output(result, json(), () => success("Order created"));
             } catch (e) {
-                error(e.message);
+                error(errorMessage(e));
             }
         });
 

@@ -3,19 +3,42 @@
  * Used by both the stdio and HTTP transports so they behave identically.
  */
 
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { API } from "zca-js";
+import type { MessageBuffer } from "./message-buffer.ts";
+import type { MCPServerConfig } from "./mcp-config.ts";
+import type { ThreadFilter } from "./thread-filter.ts";
+import type { ThreadNameCache } from "./thread-name-cache.ts";
 import { registerTools } from "./mcp-tools.ts";
-import { registerInboxResource } from "./mcp-resources.ts";
+import { registerInboxResource, type InboxSubscribers } from "./mcp-resources.ts";
+
+export interface ZaloServerOptions {
+    inboxSubscribers?: InboxSubscribers;
+}
+
+/** Registers tools and resources on a McpServer instance (one per client session). */
+export type RegisterServerFn = (
+    server: McpServer,
+    getApi: () => API,
+    buffer: MessageBuffer,
+    filter: ThreadFilter,
+    config: MCPServerConfig,
+    nameCache?: ThreadNameCache,
+    options?: ZaloServerOptions,
+) => void;
 
 /**
- * @param {import("@modelcontextprotocol/sdk/server/mcp.js").McpServer} server
- * @param {() => object} getApi - Returns the current zca-js API instance
- * @param {import("./message-buffer.ts").MessageBuffer} buffer
- * @param {import("./thread-filter.ts").ThreadFilter} filter
- * @param {object} config - MCP config
- * @param {import("./thread-name-cache.ts").ThreadNameCache} [nameCache]
- * @param {{ inboxSubscribers?: import("./mcp-resources.ts").InboxSubscribers }} [options]
+ * @param getApi - Returns the current zca-js API instance
  */
-export function registerZaloServer(server, getApi, buffer, filter, config, nameCache, options = {}) {
+export const registerZaloServer: RegisterServerFn = (
+    server,
+    getApi,
+    buffer,
+    filter,
+    config,
+    nameCache,
+    options = {},
+) => {
     registerTools(server, getApi, buffer, filter, config, nameCache);
     registerInboxResource(server, buffer, config, nameCache, options.inboxSubscribers);
-}
+};

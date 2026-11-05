@@ -5,8 +5,9 @@
 
 import fs from "fs";
 import { Zalo, LoginQRCallbackEventType } from "zca-js";
+import type { API, Credentials, LoginQRCallbackEvent, Options } from "zca-js";
 import { HttpsProxyAgent } from "https-proxy-agent";
-import { getActive } from "./accounts.ts";
+import { getActive, type Account } from "./accounts.ts";
 import { loadCredentials } from "./credentials.ts";
 import { info } from "../utils/output.ts";
 import { createProxyFetch } from "../utils/proxy-helpers.ts";
@@ -15,7 +16,7 @@ import { createProxyFetch } from "../utils/proxy-helpers.ts";
  * Read image dimensions from file header bytes (PNG, JPEG, GIF).
  * Returns { width, height, size } or null on failure.
  */
-async function readImageMetadata(filePath) {
+async function readImageMetadata(filePath: string): Promise<{ width: number; height: number; size: number } | null> {
     const stat = await fs.promises.stat(filePath);
     const buf = Buffer.alloc(32);
     const fh = await fs.promises.open(filePath, "r");
@@ -72,28 +73,31 @@ async function readImageMetadata(filePath) {
     return { width, height, size: stat.size };
 }
 
-let _api = null;
-let _ownId = null;
+/** The QRCodeGenerated variant of zca-js's login QR event. */
+export type QrGeneratedEvent = Extract<LoginQRCallbackEvent, { type: LoginQRCallbackEventType.QRCodeGenerated }>;
+
+let _api: API | null = null;
+let _ownId: string | null = null;
 
 /** Get the current API instance or throw. */
-export function getApi() {
+export function getApi(): API {
     if (!_api) throw new Error("Not logged in. Run: zalo-agent login");
     return _api;
 }
 
 /** Get current owner ID. */
-export function getOwnId() {
+export function getOwnId(): string | null {
     return _ownId;
 }
 
 /** Check if logged in. */
-export function isLoggedIn() {
+export function isLoggedIn(): boolean {
     return _api !== null;
 }
 
 /** Create a Zalo instance with optional proxy. Suppress logs in JSON mode. */
-function createZalo(proxyUrl) {
-    const opts = {
+function createZalo(proxyUrl: string | null): Zalo {
+    const opts: Partial<Options> = {
         // Suppress zca-js internal INFO logs when --json to keep stdout clean
         logging: !process.env.ZALO_JSON_MODE,
         imageMetadataGetter: readImageMetadata,
@@ -107,13 +111,13 @@ function createZalo(proxyUrl) {
 }
 
 /** Set the active API + ownId (used after login). */
-function setSession(api, ownId) {
+function setSession(api: API, ownId: string | null): void {
     _api = api;
     _ownId = ownId;
 }
 
 /** Clear current session. */
-export function clearSession() {
+export function clearSession(): void {
     _api = null;
     _ownId = null;
 }
@@ -124,10 +128,13 @@ export function clearSession() {
  * @param {string|null} proxyUrl
  * @returns {object} - {api, ownId}
  */
-export async function loginWithCredentials(creds, proxyUrl = null) {
+export async function loginWithCredentials(
+    creds: Credentials,
+    proxyUrl: string | null = null,
+): Promise<{ api: API; ownId: string }> {
     const zalo = createZalo(proxyUrl);
     const api = await zalo.login(creds);
-    const ownId = api.getOwnId?.() || null;
+    const ownId = api.getOwnId();
     setSession(api, ownId);
     return { api, ownId };
 }
@@ -138,16 +145,19 @@ export async function loginWithCredentials(creds, proxyUrl = null) {
  * @param {function} onQrGenerated - callback(qrData) when QR is ready
  * @returns {object} - {api, ownId}
  */
-export async function loginWithQR(proxyUrl = null, onQrGenerated = null) {
+export async function loginWithQR(
+    proxyUrl: string | null = null,
+    onQrGenerated: ((event: QrGeneratedEvent) => void) | null = null,
+): Promise<{ api: API; ownId: string }> {
     const zalo = createZalo(proxyUrl);
 
-    const api = await zalo.loginQR(null, (event) => {
+    const api = await zalo.loginQR(undefined, (event) => {
         if (event.type === LoginQRCallbackEventType.QRCodeGenerated && onQrGenerated) {
             onQrGenerated(event);
         }
     });
 
-    const ownId = api.getOwnId?.() || null;
+    const ownId = api.getOwnId();
     setSession(api, ownId);
     return { api, ownId };
 }
@@ -174,11 +184,11 @@ export function extractCredentials() {
  * @returns {Promise<object>} - the active account registry entry
  * @throws {Error} code "LOGIN_REQUIRED" when no account or saved credentials exist; login errors propagate
  */
-export async function loginActiveAccount() {
+export async function loginActiveAccount(): Promise<Account> {
     const active = getActive();
     const creds = active ? loadCredentials(active.ownId) : null;
-    if (!creds) {
-        const error = new Error("no saved Zalo session");
+    if (!active || !creds) {
+        const error: Error & { code?: string } = new Error("no saved Zalo session");
         error.code = "LOGIN_REQUIRED";
         throw error;
     }
@@ -194,9 +204,10 @@ export async function loginActiveAccount() {
  * @param {Error} error
  * @returns {boolean}
  */
-export function isSessionRejected(error) {
-    if (error?.code === "LOGIN_REQUIRED") return true;
-    return error?.name === "ZcaApiError" && !String(error.message).startsWith("Failed to fetch");
+export function isSessionRejected(error: unknown): boolean {
+    const e = error as (Error & { code?: string }) | null | undefined;
+    if (e?.code === "LOGIN_REQUIRED") return true;
+    return e?.name === "ZcaApiError" && !String(e.message).startsWith("Failed to fetch");
 }
 
 /**
@@ -204,7 +215,7 @@ export function isSessionRejected(error) {
  * Called before commands that need authentication. Never throws.
  * @param {boolean} jsonMode - suppress output in JSON mode
  */
-export async function autoLogin(jsonMode = false) {
+export async function autoLogin(jsonMode = false): Promise<void> {
     if (_api) return; // Already logged in
 
     try {

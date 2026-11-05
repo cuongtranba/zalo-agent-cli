@@ -9,6 +9,18 @@ import { join } from "path";
 import { platform } from "os";
 import { execFile } from "child_process";
 import { CONFIG_DIR } from "../core/credentials.ts";
+import type { NormalizedMessage } from "./normalize-message.ts";
+import { errorMessage } from "../utils/error-message.ts";
+
+/** Options shared by the download helpers. */
+export interface DownloadOptions {
+    /** Base download directory */
+    downloadDir?: string;
+    /** Open media with system viewer after download */
+    autoOpen?: boolean;
+    /** Thread display name from cache */
+    threadName?: string | null;
+}
 
 /** Default download directory when not configured */
 const DEFAULT_DIR = join(CONFIG_DIR, "media");
@@ -20,7 +32,7 @@ const UNSAFE_CHARS = /[/\\:*?"<>|]/g;
 const DOWNLOADABLE_TYPES = new Set(["image", "video", "audio", "voice", "gif", "file"]);
 
 /** Extension lookup by content-type prefix */
-const CONTENT_TYPE_MAP = {
+const CONTENT_TYPE_MAP: Record<string, string> = {
     "image/jpeg": "jpg",
     "image/jpg": "jpg",
     "image/png": "png",
@@ -40,7 +52,7 @@ const CONTENT_TYPE_MAP = {
 };
 
 /** Fallback extension by message type when URL and content-type give no clue */
-const TYPE_DEFAULT_EXT = {
+const TYPE_DEFAULT_EXT: Record<string, string> = {
     image: "jpg",
     audio: "mp3",
     voice: "mp3",
@@ -54,7 +66,7 @@ const TYPE_DEFAULT_EXT = {
  * @param {string} name
  * @returns {string}
  */
-function sanitize(name) {
+function sanitize(name: string | null | undefined): string {
     return (name || "unknown").replace(UNSAFE_CHARS, "_").trim() || "unknown";
 }
 
@@ -65,7 +77,7 @@ function sanitize(name) {
  * @param {string} [msgType] - Normalized message type (image, audio, video, etc.)
  * @returns {string}
  */
-function guessExtension(url, contentType, msgType) {
+function guessExtension(url: string, contentType: string | undefined, msgType: string): string {
     // Try content-type first
     if (contentType) {
         const ct = contentType.split(";")[0].trim().toLowerCase();
@@ -83,7 +95,7 @@ function guessExtension(url, contentType, msgType) {
  * @param {string} type - Normalized message type
  * @returns {boolean}
  */
-export function isDownloadableMedia(type) {
+export function isDownloadableMedia(type: string): boolean {
     return DOWNLOADABLE_TYPES.has(type);
 }
 
@@ -94,7 +106,7 @@ export function isDownloadableMedia(type) {
  * @param {string} [threadName] - Resolved thread name from cache
  * @returns {string}
  */
-function buildFolderName(message, threadName) {
+function buildFolderName(message: NormalizedMessage, threadName?: string | null): string {
     if (message.threadType === "group") {
         return sanitize(threadName || message.threadId);
     }
@@ -108,7 +120,7 @@ function buildFolderName(message, threadName) {
  * @param {string} ext - File extension
  * @returns {string}
  */
-function buildFileName(message, ext) {
+function buildFileName(message: NormalizedMessage, ext: string): string {
     const d = new Date(message.timestamp);
     const date = d.toISOString().slice(0, 10); // YYYY-MM-DD
     const time = `${String(d.getHours()).padStart(2, "0")}-${String(d.getMinutes()).padStart(2, "0")}`;
@@ -122,9 +134,9 @@ function buildFileName(message, ext) {
  * Exported for use by MCP tools.
  * @param {string} filePath
  */
-export function openFile(filePath) {
+export function openFile(filePath: string): void {
     const isWin = platform() === "win32";
-    const cmds = { darwin: "open", win32: "start", linux: "xdg-open" };
+    const cmds: Record<string, string> = { darwin: "open", win32: "start", linux: "xdg-open" };
     const cmd = cmds[platform()] || "xdg-open";
     // Windows "start" is a cmd.exe builtin — needs shell: true
     execFile(cmd, isWin ? ["", filePath] : [filePath], { shell: isWin }, (err) => {
@@ -140,15 +152,15 @@ export function openFile(filePath) {
  * @param {string} [options.downloadDir] - Base download directory
  * @param {string} [options.threadName] - Thread display name from cache
  */
-export function autoDownloadMedia(message, options = {}) {
+export function autoDownloadMedia(message: NormalizedMessage, options: DownloadOptions = {}): void {
     if (!message.attachment?.url) return;
     downloadMedia(message, { ...options, autoOpen: false }).then(
         (result) => {
-            message.attachment.localPath = result.path;
+            message.attachment!.localPath = result.path;
             console.error(`[media-dl] Saved: ${result.path}`);
         },
         (err) => {
-            console.error(`[media-dl] Auto-download failed: ${err.message}`);
+            console.error(`[media-dl] Auto-download failed: ${errorMessage(err)}`);
         },
     );
 }
@@ -162,7 +174,10 @@ export function autoDownloadMedia(message, options = {}) {
  * @param {string} [options.threadName] - Thread display name from cache
  * @returns {Promise<{ success: boolean, path: string, folder: string, fileName: string, mediaType: string }>}
  */
-export async function downloadMedia(message, options = {}) {
+export async function downloadMedia(
+    message: NormalizedMessage,
+    options: DownloadOptions = {},
+): Promise<{ success: boolean; path: string; folder: string; fileName: string; mediaType: string }> {
     const url = message.attachment?.url;
     if (!url) throw new Error("Message has no attachment URL");
 

@@ -3,16 +3,21 @@
  * Supports glob-like patterns for thread matching and noise reduction.
  */
 
+import type { MCPConfig } from "./mcp-config.ts";
+import type { NormalizedMessage } from "./normalize-message.ts";
+
 /** System message types to drop (join, leave, pin, etc.) */
 const SYSTEM_MSG_TYPES = new Set(["system", "join", "leave", "pin", "unpin", "rename"]);
 
 export class ThreadFilter {
+    _watchPatterns: string[];
+    _triggerKeywords: string[];
+
     /**
-     * @param {object} config - MCP config object
-     * @param {string[]} config.watchThreads - Glob patterns like ["dm:*", "group:support"]
-     * @param {string[]} [config.triggerKeywords] - Keywords that trigger attention
+     * @param config - MCP config; uses watchThreads (glob patterns like ["dm:*", "group:support"])
+     *   and triggerKeywords (keywords that trigger attention)
      */
-    constructor(config) {
+    constructor(config: Pick<MCPConfig, "watchThreads"> & Partial<Pick<MCPConfig, "triggerKeywords">>) {
         this._watchPatterns = config.watchThreads || ["dm:*", "group:*"];
         this._triggerKeywords = (config.triggerKeywords || []).map((k) => k.toLowerCase());
     }
@@ -24,7 +29,7 @@ export class ThreadFilter {
      * @param {"group"|"dm"} threadType
      * @returns {boolean}
      */
-    shouldWatch(threadId, threadType) {
+    shouldWatch(threadId: string, threadType: "group" | "dm"): boolean {
         const key = `${threadType}:${threadId}`;
         for (const pattern of this._watchPatterns) {
             if (this._matchPattern(pattern, key, threadType)) return true;
@@ -37,7 +42,7 @@ export class ThreadFilter {
      * @param {object} message - Normalized message
      * @returns {boolean}
      */
-    shouldKeep(message) {
+    shouldKeep(message: Pick<NormalizedMessage, "type" | "text">): boolean {
         // Drop system messages
         if (message.type && SYSTEM_MSG_TYPES.has(message.type)) return false;
         // Drop sticker-only messages
@@ -55,7 +60,7 @@ export class ThreadFilter {
      * @param {object} message - Normalized message
      * @returns {boolean}
      */
-    isTrigger(message) {
+    isTrigger(message: Pick<NormalizedMessage, "text">): boolean {
         if (!message.text || this._triggerKeywords.length === 0) return false;
         const lower = message.text.toLowerCase();
         return this._triggerKeywords.some((kw) => lower.includes(kw));
@@ -68,7 +73,7 @@ export class ThreadFilter {
      * @param {string} threadType - "dm" or "group"
      * @returns {boolean}
      */
-    _matchPattern(pattern, key, threadType) {
+    _matchPattern(pattern: string, key: string, threadType: string): boolean {
         // Wildcard: "dm:*" matches all DMs, "group:*" matches all groups
         if (pattern === `${threadType}:*`) return true;
         // Catch-all patterns
