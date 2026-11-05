@@ -11,7 +11,7 @@ const LATEST_URL = "https://registry.npmjs.org/zalo-agent-cli/latest";
 /**
  * Check npm registry for latest version, warn if outdated.
  * @param currentVersion - Current package version
- * @param {boolean} jsonMode - Suppress output in JSON mode
+ * @param jsonMode - Suppress output in JSON mode
  */
 export async function checkForUpdates(currentVersion: string, jsonMode: boolean | undefined): Promise<void> {
     if (jsonMode) return;
@@ -31,7 +31,7 @@ export async function checkForUpdates(currentVersion: string, jsonMode: boolean 
 
 /**
  * Self-update by running `bun add -g zalo-agent-cli@latest`.
- * @returns {Promise<boolean>} success
+ * @returns success
  */
 export function selfUpdate(): Promise<boolean> {
     return new Promise((resolve) => {

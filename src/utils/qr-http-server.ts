@@ -11,9 +11,8 @@ import { info } from "./output.ts";
 
 /**
  * Start a temporary HTTP server that serves the QR image.
- * @param {string} qrImagePath - path to QR PNG file
- * @param {number} port - default 18927
- * @returns {{ url: string, close: () => void }}
+ * @param qrImagePath - path to QR PNG file
+ * @param port - default 18927
  */
 export function startQrServer(
     qrImagePath: string,

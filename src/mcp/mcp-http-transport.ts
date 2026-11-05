@@ -51,7 +51,7 @@ interface HTTPSession {
  * @param registerServerFn - Registers tools and resources on a McpServer instance
  * @param authToken - Bearer token (null = no auth, loopback host only)
  * @param host - Bind address
- * @throws {Error} When no authToken is set and host is not a loopback address
+ * @throws When no authToken is set and host is not a loopback address
  */
 export function createHTTPServer(
     registerServerFn: RegisterServerFn,

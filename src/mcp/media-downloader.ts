@@ -63,8 +63,6 @@ const TYPE_DEFAULT_EXT: Record<string, string> = {
 
 /**
  * Sanitize a string for use as a filesystem name.
- * @param {string} name
- * @returns {string}
  */
 function sanitize(name: string | null | undefined): string {
     return (name || "unknown").replace(UNSAFE_CHARS, "_").trim() || "unknown";
@@ -72,10 +70,7 @@ function sanitize(name: string | null | undefined): string {
 
 /**
  * Guess file extension from URL, content-type, or message type.
- * @param {string} url
- * @param {string} [contentType]
- * @param {string} [msgType] - Normalized message type (image, audio, video, etc.)
- * @returns {string}
+ * @param [msgType] - Normalized message type (image, audio, video, etc.)
  */
 function guessExtension(url: string, contentType: string | undefined, msgType: string): string {
     // Try content-type first
@@ -92,8 +87,7 @@ function guessExtension(url: string, contentType: string | undefined, msgType: s
 
 /**
  * Check if a message type is downloadable media.
- * @param {string} type - Normalized message type
- * @returns {boolean}
+ * @param type - Normalized message type
  */
 export function isDownloadableMedia(type: string | undefined): boolean {
     return DOWNLOADABLE_TYPES.has(type);
@@ -102,9 +96,8 @@ export function isDownloadableMedia(type: string | undefined): boolean {
 /**
  * Build the folder name for a thread.
  * Groups: thread display name. DMs: "DM_{senderName}".
- * @param {object} message - Normalized message
- * @param {string} [threadName] - Resolved thread name from cache
- * @returns {string}
+ * @param message - Normalized message
+ * @param [threadName] - Resolved thread name from cache
  */
 function buildFolderName(message: NormalizedMessage, threadName?: string | null): string {
     if (message.threadType === "group") {
@@ -116,9 +109,7 @@ function buildFolderName(message: NormalizedMessage, threadName?: string | null)
 /**
  * Build a descriptive filename from message metadata.
  * Format: {YYYY-MM-DD}_{HH-mm}_{sender}_{msgId}.{ext}
- * @param {object} message
- * @param {string} ext - File extension
- * @returns {string}
+ * @param ext - File extension
  */
 function buildFileName(message: NormalizedMessage, ext: string): string {
     const d = new Date(message.timestamp);
@@ -132,7 +123,6 @@ function buildFileName(message: NormalizedMessage, ext: string): string {
 /**
  * Open a file with the system's default viewer (cross-platform).
  * Exported for use by MCP tools.
- * @param {string} filePath
  */
 export function openFile(filePath: string): void {
     const isWin = platform() === "win32";
@@ -147,10 +137,9 @@ export function openFile(filePath: string): void {
 /**
  * Auto-download media in background when a message arrives.
  * Non-blocking — fires and forgets. Mutates message.attachment.localPath on success.
- * @param {object} message - Normalized message (will be mutated with localPath)
- * @param {object} [options]
- * @param {string} [options.downloadDir] - Base download directory
- * @param {string} [options.threadName] - Thread display name from cache
+ * @param message - Normalized message (will be mutated with localPath)
+ * @param [options.downloadDir] - Base download directory
+ * @param [options.threadName] - Thread display name from cache
  */
 export function autoDownloadMedia(message: NormalizedMessage, options: DownloadOptions = {}): void {
     if (!message.attachment?.url) return;
@@ -167,12 +156,10 @@ export function autoDownloadMedia(message: NormalizedMessage, options: DownloadO
 
 /**
  * Download media from URL and save to organized local folder.
- * @param {object} message - Normalized message with attachment.url
- * @param {object} [options]
- * @param {string} [options.downloadDir] - Base download directory
- * @param {boolean} [options.autoOpen] - Open media with system viewer after download
- * @param {string} [options.threadName] - Thread display name from cache
- * @returns {Promise<{ success: boolean, path: string, folder: string, fileName: string, mediaType: string }>}
+ * @param message - Normalized message with attachment.url
+ * @param [options.downloadDir] - Base download directory
+ * @param [options.autoOpen] - Open media with system viewer after download
+ * @param [options.threadName] - Thread display name from cache
  */
 export async function downloadMedia(
     message: NormalizedMessage,

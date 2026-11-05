@@ -35,8 +35,7 @@ export class MessageBuffer {
 
     /**
      * Observe pushes. Listeners run after the message is stored; a throwing listener never breaks push().
-     * @param {(threadId: string, message: object) => void} listener
-     * @returns {() => void} Unsubscribe function
+     * @returns Unsubscribe function
      */
     onPush(listener: PushListener): () => void {
         this._pushListeners.add(listener);
@@ -45,8 +44,7 @@ export class MessageBuffer {
 
     /**
      * Add message to thread buffer. Auto-evicts stale messages.
-     * @param {string} threadId
-     * @param {object} message - Normalized message object
+     * @param message - Normalized message object
      */
     push(threadId: string, message: NormalizedMessage): void {
         if (!this._threads.has(threadId)) {
@@ -69,10 +67,9 @@ export class MessageBuffer {
 
     /**
      * Read messages from a thread, optionally since a cursor.
-     * @param {string} [threadId] - If omitted, reads from all threads
-     * @param {number} [since=0] - Cursor to read from (exclusive)
-     * @param {number} [maxCount=20] - Max messages to return
-     * @returns {{ messages: Array, cursor: number, hasMore: boolean }}
+     * @param [threadId] - If omitted, reads from all threads
+     * @param [since=0] - Cursor to read from (exclusive)
+     * @param [maxCount=20] - Max messages to return
      */
     read(
         threadId?: string,
@@ -101,8 +98,7 @@ export class MessageBuffer {
 
     /**
      * Advance read cursor — discard messages at or before given cursor.
-     * @param {number} cursor
-     * @returns {number} Count of discarded messages
+     * @returns Count of discarded messages
      */
     markRead(cursor: number): number {
         let discarded = 0;
@@ -116,8 +112,7 @@ export class MessageBuffer {
 
     /**
      * Get stats for all threads with buffered messages.
-     * @param {number} [readCursor=0] - Messages after this cursor are "unread"
-     * @returns {Array<{ threadId: string, unread: number, total: number, lastActivity: number }>}
+     * @param [readCursor=0] - Messages after this cursor are "unread"
      */
     getStats(readCursor = 0): ThreadStats[] {
         const stats: ThreadStats[] = [];
@@ -136,8 +131,6 @@ export class MessageBuffer {
 
     /**
      * Get thread type from first buffered message.
-     * @param {string} threadId
-     * @returns {string|null}
      */
     getThreadType(threadId: string): string | null {
         const thread = this._threads.get(threadId);
@@ -146,7 +139,6 @@ export class MessageBuffer {
 
     /**
      * Evict messages that exceed maxSize or maxAge for a given thread.
-     * @param {string} threadId
      */
     _evict(threadId: string): void {
         const thread = this._threads.get(threadId);

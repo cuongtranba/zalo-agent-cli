@@ -23,8 +23,6 @@ export interface ThreadInfo {
 /**
  * Normalize Vietnamese text for fuzzy matching.
  * Strips diacritics and lowercases for accent-insensitive comparison.
- * @param {string} text
- * @returns {string}
  */
 function normalizeVietnamese(text: string): string {
     return text
@@ -42,7 +40,7 @@ export class ThreadNameCache {
     /**
      * Initialize cache by fetching all groups and friends from Zalo API.
      * Batches group info requests (50 per batch) to avoid rate limits.
-     * @param {object} api - zca-js API instance
+     * @param api - zca-js API instance
      */
     async init(api: ThreadNameApi): Promise<void> {
         const start = Date.now();
@@ -100,8 +98,6 @@ export class ThreadNameCache {
 
     /**
      * Get thread info by ID. Returns null if not cached.
-     * @param {string} threadId
-     * @returns {{ name: string, type: "group"|"dm", memberCount?: number } | null}
      */
     get(threadId: string): ThreadInfo | null {
         return this._cache.get(threadId) || null;
@@ -109,8 +105,6 @@ export class ThreadNameCache {
 
     /**
      * Get thread name by ID. Returns null if not cached.
-     * @param {string} threadId
-     * @returns {string | null}
      */
     getName(threadId: string): string | null {
         return this._cache.get(threadId)?.name || null;
@@ -118,10 +112,9 @@ export class ThreadNameCache {
 
     /**
      * Search threads by name with Vietnamese-aware fuzzy matching.
-     * @param {string} query - Search keyword
-     * @param {"group"|"dm"|"all"} [type="all"] - Filter by thread type
-     * @param {number} [limit=10] - Max results
-     * @returns {Array<{ threadId: string, name: string, type: "group"|"dm", memberCount?: number }>}
+     * @param query - Search keyword
+     * @param [type="all"] - Filter by thread type
+     * @param [limit=10] - Max results
      */
     search(query: string, type: "group" | "dm" | "all" = "all", limit = 10): Array<ThreadInfo & { threadId: string }> {
         const normalizedQuery = normalizeVietnamese(query);
@@ -151,8 +144,7 @@ export class ThreadNameCache {
 
     /**
      * Update a single thread entry (e.g. on group rename event).
-     * @param {string} threadId
-     * @param {object} info - Partial update: { name?, type?, memberCount? }
+     * @param info - Partial update: { name?, type?, memberCount? }
      */
     set(threadId: string, info: Partial<ThreadInfo>): void {
         const existing = this._cache.get(threadId);
@@ -163,12 +155,12 @@ export class ThreadNameCache {
         }
     }
 
-    /** @returns {boolean} Whether cache has been initialized */
+    /** Whether the cache has been initialized */
     get ready(): boolean {
         return this._ready;
     }
 
-    /** @returns {number} Total cached entries */
+    /** Total cached entries */
     get size(): number {
         return this._cache.size;
     }

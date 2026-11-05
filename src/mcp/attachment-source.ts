@@ -27,7 +27,6 @@ const EXT_BY_CONTENT_TYPE: Record<string, string> = {
 
 /**
  * Create a temp dir for downloaded attachments. Caller must rm it when done.
- * @returns {Promise<string>}
  */
 export function createAttachmentDir(): Promise<string> {
     return mkdtemp(join(tmpdir(), "zalo-attach-"));
@@ -35,8 +34,8 @@ export function createAttachmentDir(): Promise<string> {
 
 /**
  * Validate a local file source.
- * @param {string} source - Absolute path on the server host
- * @returns {Promise<string>} The same path when it is an existing regular file
+ * @param source - Absolute path on the server host
+ * @returns The same path when it is an existing regular file
  */
 async function resolveLocalFile(source: string): Promise<string> {
     if (!isAbsolute(source)) throw new Error(`Attachment path must be absolute: ${source}`);
@@ -52,10 +51,7 @@ async function resolveLocalFile(source: string): Promise<string> {
 
 /**
  * Derive a safe "name.ext" filename for a downloaded URL.
- * @param {URL} url
- * @param {string} contentType
- * @param {number} index - Position in the sources list, keeps names unique
- * @returns {string}
+ * @param index - Position in the sources list, keeps names unique
  */
 function safeFilename(url: URL, contentType: string, index: number): string {
     let name = "";
@@ -76,10 +72,8 @@ function safeFilename(url: URL, contentType: string, index: number): string {
 
 /**
  * Download an http(s) URL into dir.
- * @param {string} source
- * @param {string} dir - Existing temp dir
- * @param {number} index
- * @returns {Promise<string>} Path of the downloaded file
+ * @param dir - Existing temp dir
+ * @returns Path of the downloaded file
  */
 async function downloadUrl(source: string, dir: string, index: number): Promise<string> {
     const url = new URL(source);
@@ -107,9 +101,8 @@ async function downloadUrl(source: string, dir: string, index: number): Promise<
 
 /**
  * Resolve every source to a local file path.
- * @param {string[]} sources - Absolute server paths or http(s) URLs
- * @param {string} dir - Temp dir for downloads (from createAttachmentDir)
- * @returns {Promise<string[]>}
+ * @param sources - Absolute server paths or http(s) URLs
+ * @param dir - Temp dir for downloads (from createAttachmentDir)
  */
 export async function resolveAttachmentSources(sources: string[], dir: string): Promise<string[]> {
     // Sequential so a failure never leaves in-flight writes racing the caller's temp dir cleanup

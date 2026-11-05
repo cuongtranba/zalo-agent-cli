@@ -88,7 +88,6 @@ export function loadMCPConfig(): MCPConfig {
 
 /**
  * Save MCP config to disk.
- * @param {object} config
  */
 export function saveMCPConfig(config: MCPConfig): void {
     mkdirSync(CONFIG_DIR, { recursive: true });
@@ -97,8 +96,7 @@ export function saveMCPConfig(config: MCPConfig): void {
 
 /**
  * Parse duration string (e.g. "2h", "5m", "30s") to milliseconds.
- * @param {string|number} duration
- * @returns {number} Milliseconds
+ * @returns Milliseconds
  */
 export function parseDuration(duration: string | number): number {
     if (typeof duration === "number") return duration;

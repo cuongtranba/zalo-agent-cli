@@ -124,9 +124,8 @@ export function clearSession(): void {
 
 /**
  * Login with saved credentials + proxy.
- * @param {object} creds - {imei, cookie, userAgent, language?}
- * @param {string|null} proxyUrl
- * @returns {object} - {api, ownId}
+ * @param creds - {imei, cookie, userAgent, language?}
+ * @returns the API instance and the own user id
  */
 export async function loginWithCredentials(
     creds: Credentials,
@@ -141,9 +140,8 @@ export async function loginWithCredentials(
 
 /**
  * Login via QR code with optional proxy.
- * @param {string|null} proxyUrl
- * @param {function} onQrGenerated - callback(qrData) when QR is ready
- * @returns {object} - {api, ownId}
+ * @param onQrGenerated - callback(qrData) when QR is ready
+ * @returns the API instance and the own user id
  */
 export async function loginWithQR(
     proxyUrl: string | null = null,
@@ -164,7 +162,7 @@ export async function loginWithQR(
 
 /**
  * Extract credentials from current session for saving.
- * @returns {object} - {imei, cookie, userAgent, language}
+ * @returns the session credentials: imei, cookie, userAgent, language
  */
 export function extractCredentials() {
     const api = getApi();
@@ -181,8 +179,8 @@ export function extractCredentials() {
  * Log in the active account from its saved credentials, replacing any current session.
  * Unlike autoLogin, failures are thrown so callers can decide whether to retry or give up.
  * Callers that need a fresh session call clearSession() first.
- * @returns {Promise<object>} - the active account registry entry
- * @throws {Error} code "LOGIN_REQUIRED" when no account or saved credentials exist; login errors propagate
+ * @returns the active account registry entry
+ * @throws code "LOGIN_REQUIRED" when no account or saved credentials exist; login errors propagate
  */
 export async function loginActiveAccount(): Promise<Account> {
     const active = getActive();
@@ -201,8 +199,6 @@ export async function loginActiveAccount(): Promise<Account> {
  * Whether a login error means the saved session is no longer usable (missing or rejected by Zalo),
  * as opposed to a transient network failure that is worth retrying.
  * zca-js reports HTTP-transport failures as ZcaApiError messages starting with "Failed to fetch".
- * @param {Error} error
- * @returns {boolean}
  */
 export function isSessionRejected(error: unknown): boolean {
     const e = error as (Error & { code?: string }) | null | undefined;
@@ -213,7 +209,7 @@ export function isSessionRejected(error: unknown): boolean {
 /**
  * Auto-login using active account from registry.
  * Called before commands that need authentication. Never throws.
- * @param {boolean} jsonMode - suppress output in JSON mode
+ * @param jsonMode - suppress output in JSON mode
  */
 export async function autoLogin(jsonMode = false): Promise<void> {
     if (_api) return; // Already logged in

@@ -34,8 +34,8 @@ export interface NormalizedMessage {
 
 /**
  * Normalize a raw zca-js message event into the buffer's message shape.
- * @param {object} msg - Raw zca-js message event
- * @returns {object} Normalized message
+ * @param msg - Raw zca-js message event
+ * @returns Normalized message
  */
 /** The fields of a zca-js message event that normalizeMessage reads. */
 export interface RawMessageEvent {

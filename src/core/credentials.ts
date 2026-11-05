@@ -30,9 +30,8 @@ function credPath(ownId: string): string {
 
 /**
  * Save credentials for a specific account.
- * @param {string} ownId
  * @param creds - {imei, cookie, userAgent, language?}
- * @returns {string} File path
+ * @returns File path
  */
 export function saveCredentials(ownId: string, creds: SaveableCredentials): string {
     ensureDirs();
@@ -44,8 +43,6 @@ export function saveCredentials(ownId: string, creds: SaveableCredentials): stri
 
 /**
  * Load credentials for a specific account.
- * @param {string} ownId
- * @returns {object|null}
  */
 export function loadCredentials(ownId: string): Credentials | null {
     const target = credPath(ownId);
@@ -59,8 +56,6 @@ export function loadCredentials(ownId: string): Credentials | null {
 
 /**
  * Delete credentials for a specific account.
- * @param {string} ownId
- * @returns {boolean}
  */
 export function deleteCredentials(ownId: string): boolean {
     const target = credPath(ownId);

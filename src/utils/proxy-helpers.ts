@@ -14,7 +14,6 @@ export function maskProxy(proxyUrl: string | null | undefined): string {
 /**
  * Create a fetch that routes every request through the given proxy.
  * Bun's fetch takes a `proxy` option; the `dispatcher` option used by undici is ignored.
- * @param {string} proxyUrl
  */
 export function createProxyFetch(proxyUrl: string): typeof fetch {
     const proxied = (input: string | URL | Request, init: RequestInit = {}) =>

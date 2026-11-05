@@ -71,7 +71,7 @@ export class ZaloNotifier {
 
     /**
      * Called when a new message arrives. Queues notification if conditions are met.
-     * @param {object} message - Normalized message object
+     * @param message - Normalized message object
      */
     onMessage(message: NormalizedMessage): void {
         if (!this._shouldNotify(message)) return;
@@ -84,8 +84,6 @@ export class ZaloNotifier {
 
     /**
      * Determine whether this message warrants a notification.
-     * @param {object} message
-     * @returns {boolean}
      */
     _shouldNotify(message: NormalizedMessage): boolean {
         if (!this._enabled || !this._notifyThread) return false;
@@ -129,8 +127,7 @@ export class ZaloNotifier {
 
     /**
      * Build a human-readable type breakdown string, e.g. "2 text, 1 ảnh".
-     * @param {object[]} messages - Array of normalized messages
-     * @returns {string}
+     * @param messages - Array of normalized messages
      */
     _buildTypeBreakdown(messages: NormalizedMessage[]): string {
         const counts: Record<string, number> = {};

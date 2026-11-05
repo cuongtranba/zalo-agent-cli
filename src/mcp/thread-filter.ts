@@ -29,9 +29,6 @@ export class ThreadFilter {
     /**
      * Check if a thread should be watched based on patterns.
      * Pattern format: "dm:*", "group:*", "group:exact_id", "dm:exact_id"
-     * @param {string} threadId
-     * @param {"group"|"dm"} threadType
-     * @returns {boolean}
      */
     shouldWatch(threadId: string, threadType: "group" | "dm"): boolean {
         const key = `${threadType}:${threadId}`;
@@ -43,8 +40,7 @@ export class ThreadFilter {
 
     /**
      * Check if a message passes noise filter (drop stickers, short emoji, system msgs).
-     * @param {object} message - Normalized message
-     * @returns {boolean}
+     * @param message - Normalized message
      */
     shouldKeep(message: FilterableMessage): boolean {
         // Drop system messages
@@ -61,8 +57,7 @@ export class ThreadFilter {
 
     /**
      * Check if a message is a trigger (contains keyword or @mention).
-     * @param {object} message - Normalized message
-     * @returns {boolean}
+     * @param message - Normalized message
      */
     isTrigger(message: FilterableMessage): boolean {
         if (!message.text || this._triggerKeywords.length === 0) return false;
@@ -72,10 +67,9 @@ export class ThreadFilter {
 
     /**
      * Match a pattern against a thread key.
-     * @param {string} pattern - e.g. "dm:*", "group:support_123"
-     * @param {string} key - e.g. "dm:user_456", "group:support_123"
-     * @param {string} threadType - "dm" or "group"
-     * @returns {boolean}
+     * @param pattern - e.g. "dm:*", "group:support_123"
+     * @param key - e.g. "dm:user_456", "group:support_123"
+     * @param threadType - "dm" or "group"
      */
     _matchPattern(pattern: string, key: string, threadType: string): boolean {
         // Wildcard: "dm:*" matches all DMs, "group:*" matches all groups

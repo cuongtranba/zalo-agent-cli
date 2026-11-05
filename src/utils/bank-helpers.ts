@@ -185,8 +185,7 @@ const BIN_TO_SEPAY: Record<number, string> = {
 
 /**
  * Resolve bank name or BIN string to numeric BIN code.
- * @param {string} input - Bank name alias or BIN number
- * @returns {number|null}
+ * @param input - Bank name alias or BIN number
  */
 export function resolveBankBin(input: string): number | null {
     if (/^\d+$/.test(input)) {
@@ -198,12 +197,9 @@ export function resolveBankBin(input: string): number | null {
 
 /**
  * Download VietQR transfer image from qr.sepay.vn.
- * @param {number} bin
- * @param {string} accountNumber
- * @param {number|null} amount
- * @param {string|null} content - Max 50 chars, SePay param name is "des"
- * @param {string} template - compact | print | qronly
- * @returns {Promise<string|null>} Temp file path or null on failure
+ * @param content - Max 50 chars, SePay param name is "des"
+ * @param template - compact | print | qronly
+ * @returns Temp file path or null on failure
  */
 export async function generateQrTransferImage(
     bin: number,
