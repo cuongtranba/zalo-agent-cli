@@ -18,7 +18,6 @@ All notable changes to this project will be documented in this file.
 ### Removed
 
 - Donation section and QR image from the README.
-
 - ClawHub auto-publish workflow (`.github/workflows/clawhub-publish.yml`) and the `clawhub install zalo-agent` instructions. The `skill/` folder remains usable locally by agents.
 
 ### Added
