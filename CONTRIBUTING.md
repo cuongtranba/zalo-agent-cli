@@ -9,19 +9,35 @@ Thanks for your interest in contributing! This guide will help you get started.
 git clone https://github.com/ChickenAI/zalo-agent-cli.git
 cd zalo-agent-cli
 
-# Install dependencies
-npm install
+# Install dependencies (Bun >= 1.4.2; the repo pins the version in .bun-version)
+bun install
 
 # Link globally for local testing
-npm link
+bun link
 
 # Verify
 zalo-agent --version
+
+# Run all checks (typecheck, lint, format check, tests)
+bun run check
 ```
+
+Scripts:
+
+| Script | What it does |
+|--------|--------------|
+| `bun run typecheck` | `tsc --noEmit` (strict) |
+| `bun run lint` / `bun run lint:fix` | oxlint (see below) |
+| `bun run format:check` / `bun run format` | Prettier |
+| `bun test` | Test suite on `bun:test` |
+| `bun run build:bin` | Standalone binary in `dist/` |
+| `bun run check` | Typecheck, lint, format check and tests in sequence |
 
 ## Code Style
 
-- **ESM modules** — use `import`/`export`, never `require()`
+- **TypeScript, Bun only** — sources are `.ts` and run directly on Bun (no build step, Node is not supported)
+- **ESM modules** — use `import`/`export`, never `require()`; import local files with the `.ts` extension
+- **Strict types** — no explicit `any`, no non-null assertions (`!`), `import type` for type-only imports
 - **No `var`** — use `const` by default, `let` when reassignment needed
 - **Async/await** — no raw `.then()` chains
 - **4-space indentation** — enforced by Prettier
@@ -30,40 +46,47 @@ zalo-agent --version
 
 ### Lint & Format
 
+Linting uses [oxlint](https://oxc.rs) with the rules in `.oxlintrc.json`: correctness and suspicious rules are errors, warnings fail the run, and unused disable directives are reported. Formatting uses Prettier.
+
 ```bash
 # Check for issues
-npm run lint
-npm run format:check
+bun run lint
+bun run format:check
 
 # Auto-fix
-npm run lint:fix
-npm run format
+bun run lint:fix
+bun run format
 ```
 
-All PRs must pass `npm run lint` and `npm run format:check`.
+All PRs must pass `bun run check`.
+
+Suppressions must be targeted and explain themselves, for example `// oxlint-disable-next-line typescript/no-explicit-any -- reason`. `@ts-expect-error` needs a description and `@ts-ignore` is banned.
+
+> `bun lint` (a built-in linter) exists only in Bun canary builds today and reads `.oxlintrc.json` directly. When it ships in a stable Bun release, switching is a change to the `lint` scripts in `package.json`; the config stays as is.
 
 ## Project Structure
 
 ```
 src/
-├── index.js              # CLI entry point (Commander.js)
+├── index.ts              # CLI entry point (Commander.js)
 ├── commands/             # One file per command group
-│   ├── login.js          # login, logout, status, whoami
-│   ├── msg.js            # 10 message subcommands
-│   ├── friend.js         # 10 friend subcommands
-│   ├── group.js          # 9 group subcommands
-│   ├── conv.js           # 7 conversation subcommands
-│   └── account.js        # 6 account subcommands
+│   ├── login.ts          # login, logout, status, whoami
+│   ├── msg.ts            # message subcommands
+│   ├── friend.ts         # friend subcommands
+│   ├── group.ts          # group subcommands
+│   ├── conv.ts           # conversation subcommands
+│   └── account.ts        # account subcommands
 ├── core/                 # Business logic (no CLI deps)
-│   ├── zalo-client.js    # Direct zca-js wrapper
-│   ├── credentials.js    # Credential storage (0600)
-│   └── accounts.js       # Account registry
+│   ├── zalo-client.ts    # Direct zca-js wrapper
+│   ├── credentials.ts    # Credential storage (0600)
+│   └── accounts.ts       # Account registry
+├── mcp/                  # MCP server (stdio + HTTP)
 └── utils/                # Shared helpers
-    ├── output.js         # JSON/human output formatter
-    ├── proxy-helpers.js  # Proxy URL masking
-    ├── bank-helpers.js   # Bank BIN mapping + VietQR
-    ├── qr-display.js     # Cross-platform QR display
-    └── qr-http-server.js # Local HTTP QR server
+    ├── output.ts         # JSON/human output formatter
+    ├── proxy-helpers.ts  # Proxy URL masking
+    ├── bank-helpers.ts   # Bank BIN mapping + VietQR
+    ├── qr-display.ts     # Cross-platform QR display
+    └── qr-http-server.ts # Local HTTP QR server
 ```
 
 ## Adding a New Command
@@ -71,16 +94,18 @@ src/
 1. Find the appropriate file in `src/commands/`
 2. Follow the existing pattern:
 
-```js
+```ts
 subcommand.command("my-command <arg>")
     .description("What it does")
     .option("-x, --flag <value>", "Description")
-    .action(async (arg, opts) => {
+    .action(async (arg: string, opts: { flag?: string }) => {
         try {
             const api = getApi();
             const result = await api.someMethod(arg);
             output(result, program.opts().json, () => success("Done"));
-        } catch (e) { error(e.message); }
+        } catch (e) {
+            error(errorMessage(e));
+        }
     });
 ```
 
@@ -114,7 +139,7 @@ refactor: extract shared QR logic
 
 1. Fork the repo
 2. Create a feature branch: `git checkout -b feat/my-feature`
-3. Make changes + ensure lint passes
+3. Make changes + ensure `bun run check` passes
 4. Write clear commit messages
 5. Push and open a PR against `main`
 6. Describe what changed and why in the PR description
@@ -122,8 +147,8 @@ refactor: extract shared QR logic
 ## Testing
 
 ```bash
-# Run tests (when available)
-npm test
+# Run tests
+bun test
 
 # Manual testing — login and verify commands work
 zalo-agent login
@@ -134,7 +159,7 @@ zalo-agent account list
 ## Reporting Issues
 
 - Search existing issues first
-- Include: Node.js version, OS, error message, steps to reproduce
+- Include: Bun version (`bun --version`), OS, error message, steps to reproduce
 - **NEVER** include credentials, cookies, or proxy passwords in issues
 
 ## Code of Conduct

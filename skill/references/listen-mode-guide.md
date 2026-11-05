@@ -51,11 +51,11 @@ done
 
 ## Production Deployment (pm2)
 ```bash
-npm install -g pm2
+bun add -g pm2
 
-# Start
-pm2 start "zalo-agent listen --webhook http://n8n.local/webhook/zalo --no-self" \
-  --name zalo-listener
+# Start (pm2 runs the CLI with Bun)
+pm2 start zalo-agent --interpreter bun --name zalo-listener \
+  -- listen --webhook http://n8n.local/webhook/zalo --no-self
 
 # Monitor
 pm2 logs zalo-listener

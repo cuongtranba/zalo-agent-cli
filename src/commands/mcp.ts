@@ -1,0 +1,222 @@
+/**
+ * MCP server command — starts a Model Context Protocol server over stdio transport.
+ * Allows Claude Code and other MCP clients to read/send Zalo messages via tool calls.
+ *
+ * IMPORTANT: All diagnostic output uses console.error() — stdout is the MCP transport channel.
+ */
+
+import type { Command } from "commander";
+import type { API } from "zca-js";
+import { getApi, loginActiveAccount, isSessionRejected, clearSession } from "../core/zalo-client.ts";
+import { MessageBuffer } from "../mcp/message-buffer.ts";
+import { ThreadFilter } from "../mcp/thread-filter.ts";
+import { loadMCPConfig, parseDuration } from "../mcp/mcp-config.ts";
+import { createMCPServer } from "../mcp/mcp-server.ts";
+import { registerZaloServer } from "../mcp/mcp-setup.ts";
+import { InboxSubscribers } from "../mcp/mcp-resources.ts";
+import { createHTTPServer } from "../mcp/mcp-http-transport.ts";
+import { ZaloNotifier } from "../mcp/notifier.ts";
+import { normalizeMessage } from "../mcp/normalize-message.ts";
+import { ThreadNameCache } from "../mcp/thread-name-cache.ts";
+import { autoDownloadMedia, isDownloadableMedia } from "../mcp/media-downloader.ts";
+import { errorMessage } from "../utils/error-message.ts";
+
+/** Zalo close code for duplicate web session — fatal, do not retry */
+const CLOSE_DUPLICATE = 3000;
+
+/** Exit code for a missing or expired Zalo session (EX_CONFIG); start pm2 with `--stop-exit-codes 78` to avoid a restart loop */
+export const EXIT_LOGIN_REQUIRED = 78;
+
+/**
+ * Exit with EXIT_LOGIN_REQUIRED when a login error means the saved session is missing or rejected.
+ * Returns normally for transient errors so the caller can retry or exit with code 1.
+ * @param error - error thrown by loginActiveAccount
+ */
+function exitIfSessionRejected(error: unknown): void {
+    if (!isSessionRejected(error)) return;
+    console.error(
+        `[mcp] Zalo session expired or missing (${errorMessage(error)}). Run: zalo-agent login, then restart the MCP server.`,
+    );
+    process.exit(EXIT_LOGIN_REQUIRED);
+}
+
+export function registerMCPCommands(program: Command): void {
+    const mcp = program.command("mcp").description("MCP server for AI agent integration");
+
+    mcp.command("start")
+        .description("Start MCP server (stdio or HTTP transport)")
+        .option("--config <path>", "Config file path (default: ~/.zalo-agent-cli/mcp-config.json)")
+        .option("--http <port>", "Use HTTP transport on specified port (default: stdio)")
+        .option("--auth <token>", "Bearer token for HTTP auth (only with --http)")
+        .option("--host <address>", "HTTP bind address (default: 127.0.0.1, only with --http)")
+        .action(async (opts: { config?: string; http?: string; auth?: string; host?: string }) => {
+            // Perform login explicitly here — preAction hook skips "mcp".
+            // Fail before anything else is set up: a dead session must not leave a half-started server behind.
+            try {
+                await loginActiveAccount();
+            } catch (e) {
+                exitIfSessionRejected(e);
+                console.error(`[mcp] Zalo login failed: ${errorMessage(e)}`);
+                process.exit(1);
+            }
+
+            // Load MCP config (config path option reserved for future use)
+            const config = loadMCPConfig();
+            console.error("[mcp] Config loaded:", JSON.stringify(config.limits));
+
+            // Build buffer + filter from config
+            const maxAge = parseDuration(config.limits?.bufferMaxAge ?? "2h");
+            const maxSize = config.limits?.bufferMaxSize ?? 500;
+            const buffer = new MessageBuffer(maxSize, maxAge);
+            const filter = new ThreadFilter(config);
+
+            // Build thread name cache (groups + friends → in-memory index)
+            const nameCache = new ThreadNameCache();
+            try {
+                await nameCache.init(getApi());
+            } catch (e) {
+                console.error("[mcp] Thread name cache init failed (non-fatal):", errorMessage(e));
+            }
+
+            // Shared by every session and the notifier: the Zalo-group notification is skipped while a client
+            // is subscribed to zalo://inbox, because that client gets a push instead
+            const inboxSubscribers = new InboxSubscribers();
+
+            // Start MCP server — stdio (default) or HTTP
+            let httpServer = null;
+            try {
+                if (opts.http) {
+                    const port = Number(opts.http);
+                    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+                        console.error(`[mcp] Invalid port: ${opts.http}. Must be 1-65535.`);
+                        process.exit(1);
+                    }
+                    const deps = { getApi, buffer, filter, config, nameCache, inboxSubscribers };
+                    const authToken = opts.auth?.trim() || null;
+                    httpServer = createHTTPServer(registerZaloServer, deps, port, authToken, opts.host || "127.0.0.1");
+                    console.error(`[mcp] HTTP server started on port ${port}`);
+                } else {
+                    await createMCPServer(getApi, buffer, filter, config, nameCache, { inboxSubscribers });
+                }
+            } catch (e) {
+                console.error("[mcp] Failed to start MCP server:", errorMessage(e));
+                process.exit(1);
+            }
+
+            // Setup notifier (sends to Zalo group when no client is subscribed to zalo://inbox)
+            const notifier = new ZaloNotifier(getApi, config, { inboxSubscribers });
+
+            let reconnectCount = 0;
+            let shuttingDown = false;
+
+            /**
+             * Attach Zalo listener handlers to the current API instance.
+             * Must be called again after each re-login with the new API instance.
+             */
+            function attachListenerHandlers(api: API) {
+                api.listener.on("message", (msg) => {
+                    // Skip self-sent messages
+                    if (msg.isSelf) return;
+
+                    const normalized = normalizeMessage(msg);
+
+                    // Apply thread watch filter
+                    if (!filter.shouldWatch(normalized.threadId, normalized.threadType)) return;
+
+                    // Apply noise filter (stickers, system msgs, short emoji)
+                    if (!filter.shouldKeep(normalized)) return;
+
+                    // Auto-download media (images, audio, video) in background
+                    if (normalized.attachment?.url && isDownloadableMedia(normalized.type)) {
+                        const threadName = nameCache?.get(normalized.threadId)?.name || null;
+                        autoDownloadMedia(normalized, {
+                            downloadDir: config.media?.downloadDir || undefined,
+                            threadName,
+                        });
+                    }
+
+                    buffer.push(normalized.threadId, normalized);
+                    notifier.onMessage(normalized);
+                    console.error(`[mcp] Buffered ${normalized.threadType} msg from ${normalized.threadId}`);
+                });
+
+                api.listener.on("connected", () => {
+                    if (reconnectCount > 0) {
+                        console.error(`[mcp] Reconnected (#${reconnectCount})`);
+                    }
+                });
+
+                api.listener.on("disconnected", (code) => {
+                    if (shuttingDown) return;
+                    console.error(`[mcp] Disconnected (code: ${code}). Auto-retrying...`);
+                });
+
+                api.listener.on("closed", async (code) => {
+                    // Ctrl+C stops the listener, which fires this event — don't re-login.
+                    if (shuttingDown) return;
+                    if (code === CLOSE_DUPLICATE) {
+                        console.error("[mcp] Duplicate Zalo Web session detected. Exiting.");
+                        process.exit(1);
+                    }
+                    reconnectCount++;
+                    console.error(
+                        `[mcp] Connection closed (code: ${code}). Re-login in 5s... (reconnect #${reconnectCount})`,
+                    );
+                    await new Promise((r) => setTimeout(r, 5000));
+                    try {
+                        clearSession();
+                        await loginActiveAccount();
+                        console.error("[mcp] Re-login successful. Restarting listener...");
+                        const newApi = getApi();
+                        attachListenerHandlers(newApi);
+                        newApi.listener.start({ retryOnClose: true });
+                    } catch (e) {
+                        exitIfSessionRejected(e);
+                        console.error(`[mcp] Re-login failed: ${errorMessage(e)}. Retrying in 30s...`);
+                        await new Promise((r) => setTimeout(r, 30000));
+                        try {
+                            clearSession();
+                            await loginActiveAccount();
+                            const retryApi = getApi();
+                            attachListenerHandlers(retryApi);
+                            retryApi.listener.start({ retryOnClose: true });
+                            console.error("[mcp] Re-login successful on retry.");
+                        } catch (e2) {
+                            exitIfSessionRejected(e2);
+                            console.error(`[mcp] Re-login retry failed: ${errorMessage(e2)}. Exiting.`);
+                            process.exit(1);
+                        }
+                    }
+                });
+
+                api.listener.on("error", () => {
+                    // WS errors are followed by close/disconnect — suppress to avoid noise
+                });
+            }
+
+            // Wire listener and start
+            try {
+                const api = getApi();
+                attachListenerHandlers(api);
+                api.listener.start({ retryOnClose: true });
+                console.error("[mcp] Zalo listener started. MCP server ready.");
+            } catch (e) {
+                console.error("[mcp] Failed to start listener:", errorMessage(e));
+                process.exit(1);
+            }
+
+            // Graceful shutdown on SIGINT
+            process.once("SIGINT", () => {
+                shuttingDown = true;
+                try {
+                    getApi().listener.stop();
+                } catch {}
+                notifier?.destroy();
+                httpServer?.close();
+                process.exit(0);
+            });
+
+            // Keep process alive (MCP server runs on stdio — process must not exit)
+            await new Promise(() => {});
+        });
+}

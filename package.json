@@ -4,22 +4,27 @@
   "description": "CLI tool for Zalo automation — multi-account, proxy, bank transfers, QR payments, Official Account API v3.0",
   "type": "module",
   "bin": {
-    "zalo-agent": "src/index.js"
+    "zalo-agent": "src/index.ts"
   },
-  "main": "./src/index.js",
+  "main": "./src/index.ts",
   "files": [
     "src/",
+    "!src/**/*.test.ts",
+    "!src/**/test-fixtures.ts",
     "LICENSE",
     "DISCLAIMER.md"
   ],
   "scripts": {
-    "test": "node --test src/*.test.js src/**/*.test.js",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
-    "release": "npm version patch -m 'release: v%s' && git push origin main --tags",
-    "prepublishOnly": "npm run lint && npm test"
+    "check": "bun run typecheck && bun run lint && bun run format:check && bun test",
+    "build:bin": "bun build ./src/index.ts --compile --outfile dist/zalo-agent",
+    "release": "bun pm version patch -m 'release: v%s' && git push origin main --tags",
+    "prepublishOnly": "bun run typecheck && bun test"
   },
   "keywords": [
     "zalo",
@@ -40,7 +45,7 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "bun": ">=1.4.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -48,13 +53,15 @@
     "commander": "^14.0.3",
     "express": "^5.2.1",
     "https-proxy-agent": "^8.0.0",
-    "node-fetch": "^3.3.0",
-    "undici": "^7.24.6",
     "zca-js": "^2.1.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "eslint": "^10.0.3",
-    "prettier": "^3.8.1"
-  }
+    "@types/bun": "^1.4.4",
+    "@types/express": "^5.0.6",
+    "oxlint": "1.91.0",
+    "prettier": "^3.8.1",
+    "typescript": "^7.0.2"
+  },
+  "packageManager": "bun@1.4.2"
 }
