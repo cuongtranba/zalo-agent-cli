@@ -122,7 +122,7 @@ Kết quả của mỗi tool là một khối `text` chứa JSON; khi lỗi, `is
 
 Server hỗ trợ cơ chế subscribe chuẩn của MCP (`resources/subscribe`) trên cả stdio và HTTP:
 
-- Resource `zalo://inbox` (`application/json`): đọc ra `{ messages, cursor, hasMore }` — cùng dạng với `zalo_get_messages` (các tin chưa `zalo_mark_read`, tối đa `limits.maxMessagesPerPoll`).
+- Resource `zalo://inbox` (`application/json`): đọc ra `{ messages, cursor, hasMore }` — cùng dạng với `zalo_get_messages` (các tin **mới nhất** chưa `zalo_mark_read`, tối đa `limits.maxMessagesPerPoll`, xếp từ cũ đến mới; `cursor` là cursor của tin mới nhất). `hasMore: true` nghĩa là còn tin cũ hơn nằm ngoài cửa sổ này — đọc chúng bằng `zalo_get_messages` (phân trang tiến theo `since`).
 - Client gọi `resources/subscribe` với `{ "uri": "zalo://inbox" }`. Mỗi khi có tin mới vào buffer, server gửi `notifications/resources/updated` với `uri` đó (không kèm nội dung tin).
 - Khi nhận thông báo, client đọc lại `zalo://inbox` hoặc gọi `zalo_get_messages` với `since` là cursor cuối cùng đã xử lý.
 - Thông báo là **best-effort** theo spec MCP (có thể mất khi mất kết nối, hoặc được gộp): luôn giữ polling bằng cursor làm nguồn sự thật.

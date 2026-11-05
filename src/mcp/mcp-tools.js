@@ -63,11 +63,12 @@ function toBatches(list, size) {
  * Shared by the zalo_get_messages tool and the zalo://inbox resource so both return the same shape.
  * @param {import("./message-buffer.js").MessageBuffer} buffer
  * @param {import("./thread-name-cache.js").ThreadNameCache} [nameCache]
- * @param {{ threadId?: string, since?: number, limit: number }} query
+ * @param {{ threadId?: string, since?: number, limit: number, newest?: boolean }} query
+ *   newest: return the latest `limit` messages (oldest→newest) instead of paging forward from `since`
  * @returns {{ messages: Array, cursor: number, hasMore: boolean }}
  */
-export function readBufferedMessages(buffer, nameCache, { threadId, since = 0, limit }) {
-    const result = buffer.read(threadId, since, limit);
+export function readBufferedMessages(buffer, nameCache, { threadId, since = 0, limit, newest = false }) {
+    const result = buffer.read(threadId, since, limit, { newest });
     if (nameCache) {
         for (const msg of result.messages) {
             const info = nameCache.get(msg.threadId);

@@ -12,9 +12,9 @@ import { MessageBuffer } from "./message-buffer.js";
 const MESSAGE = { id: "m1", threadId: "g1", threadType: "group", content: "hello", timestamp: Date.now() };
 
 /** Connect a real Client to a McpServer set up like production; resolves update URIs via `updates` */
-async function connect(buffer, inboxSubscribers) {
+async function connect(buffer, inboxSubscribers, config = {}) {
     const server = new McpServer({ name: "test", version: "0.0.0" });
-    registerZaloServer(server, () => ({}), buffer, {}, {}, undefined, { inboxSubscribers });
+    registerZaloServer(server, () => ({}), buffer, {}, config, undefined, { inboxSubscribers });
     const client = new Client({ name: "test-client", version: "0.0.0" });
     const updates = [];
     let notify;
@@ -51,6 +51,23 @@ test("reading zalo://inbox returns buffered messages in the zalo_get_messages sh
     assert.equal(inbox.messages[0].content, "hello");
     assert.equal(inbox.cursor, inbox.messages[0]._cursor);
     assert.equal(inbox.hasMore, false);
+    await client.close();
+});
+
+test("zalo://inbox shows the newest messages when more than the window are buffered", async () => {
+    const buffer = new MessageBuffer();
+    for (let i = 1; i <= 5; i++) buffer.push("g1", { ...MESSAGE, id: `m${i}` });
+    const { client } = await connect(buffer, undefined, { limits: { maxMessagesPerPoll: 2 } });
+
+    const { contents } = await client.readResource({ uri: "zalo://inbox" });
+    const inbox = JSON.parse(contents[0].text);
+
+    assert.deepEqual(
+        inbox.messages.map((m) => m.id),
+        ["m4", "m5"],
+    );
+    assert.equal(inbox.hasMore, true);
+    assert.equal(inbox.cursor, inbox.messages[1]._cursor);
     await client.close();
 });
 

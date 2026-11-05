@@ -19,6 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- `zalo://inbox` now returns the newest `limits.maxMessagesPerPoll` unread messages (oldest→newest, `hasMore` = older ones left out) instead of the oldest, so a subscriber that re-reads on each notification keeps seeing new messages when more than the window are buffered. `zalo_get_messages` paging is unchanged.
 - Idle HTTP MCP sessions now expire (`limits.sessionIdleTimeout`, default 30m) instead of accumulating forever when a client disappears without closing its session. `/health` reports the open `sessions` count.
 - The Zalo-group notifier now actually suppresses notifications while an MCP client is subscribed to `zalo://inbox` (previously it never knew about connected agents and always sent).
 - The notifier no longer drops messages that arrive while a notification is being sent; they go out in the next batch.
