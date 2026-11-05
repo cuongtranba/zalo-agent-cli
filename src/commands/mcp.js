@@ -5,7 +5,7 @@
  * IMPORTANT: All diagnostic output uses console.error() — stdout is the MCP transport channel.
  */
 
-import { getApi, autoLogin, clearSession } from "../core/zalo-client.js";
+import { getApi, loginActiveAccount, isSessionRejected, clearSession } from "../core/zalo-client.js";
 import { MessageBuffer } from "../mcp/message-buffer.js";
 import { ThreadFilter } from "../mcp/thread-filter.js";
 import { loadMCPConfig, parseDuration } from "../mcp/mcp-config.js";
@@ -20,6 +20,22 @@ import { autoDownloadMedia, isDownloadableMedia } from "../mcp/media-downloader.
 /** Zalo close code for duplicate web session — fatal, do not retry */
 const CLOSE_DUPLICATE = 3000;
 
+/** Exit code for a missing or expired Zalo session (EX_CONFIG); start pm2 with `--stop-exit-codes 78` to avoid a restart loop */
+export const EXIT_LOGIN_REQUIRED = 78;
+
+/**
+ * Exit with EXIT_LOGIN_REQUIRED when a login error means the saved session is missing or rejected.
+ * Returns normally for transient errors so the caller can retry or exit with code 1.
+ * @param {Error} error - error thrown by loginActiveAccount
+ */
+function exitIfSessionRejected(error) {
+    if (!isSessionRejected(error)) return;
+    console.error(
+        `[mcp] Zalo session expired or missing (${error.message}). Run: zalo-agent login, then restart the MCP server.`,
+    );
+    process.exit(EXIT_LOGIN_REQUIRED);
+}
+
 export function registerMCPCommands(program) {
     const mcp = program.command("mcp").description("MCP server for AI agent integration");
 
@@ -31,11 +47,12 @@ export function registerMCPCommands(program) {
         .option("--host <address>", "HTTP bind address (default: 127.0.0.1, only with --http)")
         .action(async (opts) => {
             // Perform login explicitly here — preAction hook skips "mcp".
-            // jsonMode=true keeps the "Auto-login" info line off stdout (the stdio MCP channel).
+            // Fail before anything else is set up: a dead session must not leave a half-started server behind.
             try {
-                await autoLogin(true);
+                await loginActiveAccount();
             } catch (e) {
-                console.error("[mcp] Auto-login failed:", e.message);
+                exitIfSessionRejected(e);
+                console.error(`[mcp] Zalo login failed: ${e.message}`);
                 process.exit(1);
             }
 
@@ -141,22 +158,24 @@ export function registerMCPCommands(program) {
                     await new Promise((r) => setTimeout(r, 5000));
                     try {
                         clearSession();
-                        await autoLogin(true);
+                        await loginActiveAccount();
                         console.error("[mcp] Re-login successful. Restarting listener...");
                         const newApi = getApi();
                         attachListenerHandlers(newApi);
                         newApi.listener.start({ retryOnClose: true });
                     } catch (e) {
+                        exitIfSessionRejected(e);
                         console.error(`[mcp] Re-login failed: ${e.message}. Retrying in 30s...`);
                         await new Promise((r) => setTimeout(r, 30000));
                         try {
                             clearSession();
-                            await autoLogin(true);
+                            await loginActiveAccount();
                             const retryApi = getApi();
                             attachListenerHandlers(retryApi);
                             retryApi.listener.start({ retryOnClose: true });
                             console.error("[mcp] Re-login successful on retry.");
                         } catch (e2) {
+                            exitIfSessionRejected(e2);
                             console.error(`[mcp] Re-login retry failed: ${e2.message}. Exiting.`);
                             process.exit(1);
                         }

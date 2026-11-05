@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- `mcp start` no longer crash-loops under a process manager when the saved Zalo session is expired or missing: it prints the reason once and exits with code 78 (start pm2 with `--stop-exit-codes 78`). Transient network failures still exit with code 1 so the process manager retries.
 - MCP tools, HTTP transport and notifier used the Zalo session captured at startup, so every call failed after an automatic re-login. They now resolve the current session per call.
 - `mcp start` no longer prints the auto-login line or the update notice to stdout (the stdio protocol channel).
 
