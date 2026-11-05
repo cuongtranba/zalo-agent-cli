@@ -22,6 +22,7 @@ export function getDefaultConfig() {
         },
         limits: {
             maxMessagesPerPoll: 20,
+            inboxWindow: 50,
             autoDigestThreshold: 50,
             bufferMaxAge: "2h",
             bufferMaxSize: 500,

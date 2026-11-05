@@ -122,7 +122,7 @@ Kết quả của mỗi tool là một khối `text` chứa JSON; khi lỗi, `is
 
 Server hỗ trợ cơ chế subscribe chuẩn của MCP (`resources/subscribe`) trên cả stdio và HTTP:
 
-- Resource `zalo://inbox` (`application/json`): đọc ra `{ messages, cursor, hasMore }` — cùng dạng với `zalo_get_messages` (các tin **mới nhất** chưa `zalo_mark_read`, tối đa `limits.maxMessagesPerPoll`, xếp từ cũ đến mới; `cursor` là cursor của tin mới nhất). `hasMore: true` nghĩa là còn tin cũ hơn nằm ngoài cửa sổ này — đọc chúng bằng `zalo_get_messages` (phân trang tiến theo `since`).
+- Resource `zalo://inbox` (`application/json`): đọc ra `{ messages, cursor, hasMore }` — cùng dạng với `zalo_get_messages` (các tin **mới nhất** chưa `zalo_mark_read`, tối đa `limits.inboxWindow`, mặc định 50, xếp từ cũ đến mới; `cursor` là cursor của tin mới nhất). Nếu giữa hai lần đọc lại có nhiều tin hơn cửa sổ này thì phần dư bị bỏ lỡ, nên hãy tăng `limits.inboxWindow`. `hasMore: true` nghĩa là còn tin cũ hơn nằm ngoài cửa sổ này — đọc chúng bằng `zalo_get_messages` (phân trang tiến theo `since`).
 - Client gọi `resources/subscribe` với `{ "uri": "zalo://inbox" }`. Mỗi khi có tin mới vào buffer, server gửi `notifications/resources/updated` với `uri` đó (không kèm nội dung tin).
 - Khi nhận thông báo, client đọc lại `zalo://inbox` hoặc gọi `zalo_get_messages` với `since` là cursor cuối cùng đã xử lý.
 - Thông báo là **best-effort** theo spec MCP (có thể mất khi mất kết nối, hoặc được gộp): luôn giữ polling bằng cursor làm nguồn sự thật.
@@ -316,6 +316,7 @@ File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo �
   },
   "limits": {
     "maxMessagesPerPoll": 20,
+    "inboxWindow": 50,
     "autoDigestThreshold": 50,
     "bufferMaxAge": "2h",
     "bufferMaxSize": 500,
@@ -338,6 +339,7 @@ File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo �
 | `notify.on` | Loại thread kích hoạt thông báo (`dm`, `group`) |
 | `notify.cooldown` | Gộp thông báo trong khoảng này (`30s`, `5m`, `1h`) |
 | `limits.maxMessagesPerPoll` | Số tin mặc định mỗi lần `zalo_get_messages` |
+| `limits.inboxWindow` | Số tin mới nhất mà resource `zalo://inbox` trả về mỗi lần đọc (mặc định 50) |
 | `limits.bufferMaxAge` | Tuổi tối đa của tin trong buffer (`2h`) |
 | `limits.bufferMaxSize` | Số tin tối đa mỗi thread trong buffer |
 | `limits.sessionIdleTimeout` | Thời gian session HTTP không có request nào đang mở thì bị đóng (`30m`, mặc định) |

@@ -57,7 +57,7 @@ test("reading zalo://inbox returns buffered messages in the zalo_get_messages sh
 test("zalo://inbox shows the newest messages when more than the window are buffered", async () => {
     const buffer = new MessageBuffer();
     for (let i = 1; i <= 5; i++) buffer.push("g1", { ...MESSAGE, id: `m${i}` });
-    const { client } = await connect(buffer, undefined, { limits: { maxMessagesPerPoll: 2 } });
+    const { client } = await connect(buffer, undefined, { limits: { inboxWindow: 2 } });
 
     const { contents } = await client.readResource({ uri: "zalo://inbox" });
     const inbox = JSON.parse(contents[0].text);
