@@ -1,21 +1,28 @@
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
+import type { MessageContent, SendMessageResponse } from "zca-js";
+import type { MCPConfig } from "./mcp-config.ts";
+import type { NormalizedMessage } from "./normalize-message.ts";
+import { makeMessage } from "./test-fixtures.ts";
 import { ZaloNotifier } from "./notifier.ts";
 import { InboxSubscribers } from "./mcp-resources.ts";
 
 /** Create a spy api.sendMessage that records calls */
+const SENT: SendMessageResponse = { message: null, attachment: [] };
+
 function makeSpy() {
-    const calls = [];
+    const calls: Array<{ text: string; thread: string; type: number | undefined }> = [];
     const api = {
-        sendMessage: async (text, thread, type) => {
-            calls.push({ text, thread, type });
+        sendMessage: async (message: string | MessageContent, thread: string, type?: number) => {
+            calls.push({ text: String(message), thread, type });
+            return SENT;
         },
     };
     return { api, calls };
 }
 
 /** Minimal enabled config for ZaloNotifier */
-function enabledConfig(overrides = {}) {
+function enabledConfig(overrides: Partial<MCPConfig["notify"]> = {}) {
     return {
         notify: {
             enabled: true,
@@ -40,12 +47,12 @@ function disabledConfig() {
 }
 
 /** A normalised DM message */
-function dmMsg(text = "hello", overrides = {}) {
-    return { threadType: "dm", senderId: "user_1", senderName: "Alice", text, ...overrides };
+function dmMsg(text = "hello", overrides: Partial<NormalizedMessage> = {}) {
+    return makeMessage({ threadType: "dm", senderId: "user_1", senderName: "Alice", text, ...overrides });
 }
 
 /** Wait for ms milliseconds */
-function wait(ms) {
+function wait(ms: number) {
     return new Promise((r) => setTimeout(r, ms));
 }
 
@@ -115,22 +122,22 @@ describe("ZaloNotifier flush", () => {
         "messages arriving while a notification is being sent are delivered in the next batch, not dropped",
         { timeout: 2000 },
         async () => {
-            const sent = [];
-            let releaseFirstSend;
-            let firstSendStarted;
-            let secondSendDone;
-            const started = new Promise((r) => (firstSendStarted = r));
-            const secondSent = new Promise((r) => (secondSendDone = r));
+            const sent: string[] = [];
+            let releaseFirstSend: (value: SendMessageResponse) => void = () => {};
+            let firstSendStarted: () => void = () => {};
+            let secondSendDone: () => void = () => {};
+            const started = new Promise<void>((r) => (firstSendStarted = r));
+            const secondSent = new Promise<void>((r) => (secondSendDone = r));
             // The first send stays pending until the test releases it
             const api = {
-                sendMessage: (text) => {
-                    sent.push(text);
+                sendMessage: (message: string | MessageContent) => {
+                    sent.push(String(message));
                     if (sent.length === 1) {
                         firstSendStarted();
-                        return new Promise((release) => (releaseFirstSend = release));
+                        return new Promise<SendMessageResponse>((release) => (releaseFirstSend = release));
                     }
                     secondSendDone();
-                    return Promise.resolve();
+                    return Promise.resolve(SENT);
                 },
             };
             const n = new ZaloNotifier(() => api, enabledConfig());
@@ -138,7 +145,7 @@ describe("ZaloNotifier flush", () => {
             n.onMessage(dmMsg("first"));
             await started;
             n.onMessage(dmMsg("during send"));
-            releaseFirstSend();
+            releaseFirstSend(SENT);
             await secondSent;
 
             assert.equal(sent.length, 2);
@@ -161,7 +168,7 @@ describe("ZaloNotifier onMessage - type filtering", () => {
     it("ignores messages not matching onTypes", async () => {
         const { api, calls } = makeSpy();
         const n = new ZaloNotifier(() => api, enabledConfig({ on: ["dm"] }));
-        n.onMessage({ threadType: "group", senderId: "u1", senderName: "Bob", text: "hi" });
+        n.onMessage(makeMessage({ threadType: "group", senderId: "u1", senderName: "Bob", text: "hi" }));
         await wait(30);
         assert.equal(calls.length, 0);
     });
@@ -169,7 +176,7 @@ describe("ZaloNotifier onMessage - type filtering", () => {
     it("notifies for group type when configured", async () => {
         const { api, calls } = makeSpy();
         const n = new ZaloNotifier(() => api, enabledConfig({ on: ["group"] }));
-        n.onMessage({ threadType: "group", senderId: "u1", senderName: "Bob", text: "hi" });
+        n.onMessage(makeMessage({ threadType: "group", senderId: "u1", senderName: "Bob", text: "hi" }));
         await wait(30);
         assert.equal(calls.length, 1);
     });

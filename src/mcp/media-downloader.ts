@@ -29,7 +29,7 @@ const DEFAULT_DIR = join(CONFIG_DIR, "media");
 const UNSAFE_CHARS = /[/\\:*?"<>|]/g;
 
 /** Message types that have downloadable attachments */
-const DOWNLOADABLE_TYPES = new Set(["image", "video", "audio", "voice", "gif", "file"]);
+const DOWNLOADABLE_TYPES = new Set<string | undefined>(["image", "video", "audio", "voice", "gif", "file"]);
 
 /** Extension lookup by content-type prefix */
 const CONTENT_TYPE_MAP: Record<string, string> = {
@@ -95,7 +95,7 @@ function guessExtension(url: string, contentType: string | undefined, msgType: s
  * @param {string} type - Normalized message type
  * @returns {boolean}
  */
-export function isDownloadableMedia(type: string): boolean {
+export function isDownloadableMedia(type: string | undefined): boolean {
     return DOWNLOADABLE_TYPES.has(type);
 }
 

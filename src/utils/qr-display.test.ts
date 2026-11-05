@@ -2,7 +2,7 @@
  * Tests for QR display utility — JSON mode structured output for AI agents.
  */
 
-import { describe, it, beforeEach, afterEach } from "node:test";
+import { describe, it, beforeEach, afterEach } from "bun:test";
 import assert from "node:assert/strict";
 import { displayQR, getQRPath } from "./qr-display.ts";
 import { existsSync, unlinkSync, mkdirSync } from "fs";
@@ -12,8 +12,8 @@ import { dirname } from "path";
 const TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
 
 describe("displayQR", () => {
-    let originalLog;
-    let captured;
+    let originalLog: typeof console.log;
+    let captured: string[];
 
     beforeEach(() => {
         // Capture console.log output
@@ -53,9 +53,12 @@ describe("displayQR", () => {
         process.env.ZALO_JSON_MODE = "1";
 
         // Also capture stdout.write
-        const stdoutWrites = [];
+        const stdoutWrites: unknown[] = [];
         const originalWrite = process.stdout.write;
-        process.stdout.write = (data) => stdoutWrites.push(data);
+        process.stdout.write = (data: string | Uint8Array) => {
+            stdoutWrites.push(data);
+            return true;
+        };
 
         displayQR({ data: { image: TINY_PNG_B64 } });
 

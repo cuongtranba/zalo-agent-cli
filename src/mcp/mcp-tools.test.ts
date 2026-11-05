@@ -1,16 +1,19 @@
-import { test } from "node:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { registerTools } from "./mcp-tools.ts";
+import { ThreadType, type MessageContent } from "zca-js";
+import { registerTools, type ToolsApi } from "./mcp-tools.ts";
 import { MessageBuffer } from "./message-buffer.ts";
 import { normalizeMessage } from "./normalize-message.ts";
+import { ThreadFilter } from "./thread-filter.ts";
+import { makeToolsApi } from "./test-fixtures.ts";
 
 /** Raw zca-js group message event, as delivered by the listener */
 const RAW_EVENT = {
     threadId: "g1",
-    type: 1,
+    type: ThreadType.Group,
     isSelf: false,
     data: {
         msgId: "m100",
@@ -27,24 +30,24 @@ const RAW_EVENT = {
 
 /** Fake zca-js api that records every call */
 function makeFakeApi() {
-    const calls = [];
-    const api = {
-        sendMessage: async (...args) => {
+    const calls: Array<{ method: string; args: unknown[] }> = [];
+    const api = makeToolsApi({
+        sendMessage: async (...args: Parameters<ToolsApi["sendMessage"]>) => {
             calls.push({ method: "sendMessage", args });
             return { message: { msgId: 555 }, attachment: [] };
         },
-        addReaction: async (...args) => {
+        addReaction: async (...args: Parameters<ToolsApi["addReaction"]>) => {
             calls.push({ method: "addReaction", args });
             return { msgIds: [1] };
         },
-    };
+    });
     return { api, calls };
 }
 
 /** Connect a real Client to a McpServer with the Zalo tools registered */
-async function connect(getApi, buffer = new MessageBuffer()) {
+async function connect(getApi: () => ToolsApi, buffer = new MessageBuffer()) {
     const server = new McpServer({ name: "test", version: "0.0.0" });
-    registerTools(server, getApi, buffer, {}, {});
+    registerTools(server, getApi, buffer, new ThreadFilter({ watchThreads: [] }), {});
     const client = new Client({ name: "test-client", version: "0.0.0" });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
@@ -76,8 +79,9 @@ test("zalo_send_message with replyToMessageId quotes the buffered message", asyn
     });
 
     assert.equal(result.isError, undefined);
-    const [content, threadId, type] = calls[0].args;
+    const [content, threadId, type] = calls[0].args as [Exclude<MessageContent, string>, string, number];
     assert.equal(content.msg, "answer");
+    assert.ok(content.quote);
     assert.equal(content.quote.msgId, "m100");
     assert.equal(content.quote.cliMsgId, "c100");
     assert.equal(content.quote.uidFrom, "u7");

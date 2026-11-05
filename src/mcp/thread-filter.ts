@@ -4,7 +4,11 @@
  */
 
 import type { MCPConfig } from "./mcp-config.ts";
-import type { NormalizedMessage } from "./normalize-message.ts";
+/** The fields the filter reads from a message; either may be absent or null. */
+export interface FilterableMessage {
+    type?: string | null;
+    text?: string | null;
+}
 
 /** System message types to drop (join, leave, pin, etc.) */
 const SYSTEM_MSG_TYPES = new Set(["system", "join", "leave", "pin", "unpin", "rename"]);
@@ -42,7 +46,7 @@ export class ThreadFilter {
      * @param {object} message - Normalized message
      * @returns {boolean}
      */
-    shouldKeep(message: Pick<NormalizedMessage, "type" | "text">): boolean {
+    shouldKeep(message: FilterableMessage): boolean {
         // Drop system messages
         if (message.type && SYSTEM_MSG_TYPES.has(message.type)) return false;
         // Drop sticker-only messages
@@ -60,7 +64,7 @@ export class ThreadFilter {
      * @param {object} message - Normalized message
      * @returns {boolean}
      */
-    isTrigger(message: Pick<NormalizedMessage, "text">): boolean {
+    isTrigger(message: FilterableMessage): boolean {
         if (!message.text || this._triggerKeywords.length === 0) return false;
         const lower = message.text.toLowerCase();
         return this._triggerKeywords.some((kw) => lower.includes(kw));

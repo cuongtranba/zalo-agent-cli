@@ -1,10 +1,11 @@
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
 import { MessageBuffer } from "./message-buffer.ts";
+import { makeMessage } from "./test-fixtures.ts";
 
 /** Helper: create a message with a timestamp (default = now) */
-function msg(text, timestamp = Date.now()) {
-    return { text, timestamp };
+function msg(text: string, timestamp = Date.now()) {
+    return makeMessage({ text, timestamp });
 }
 
 describe("MessageBuffer constructor", () => {
@@ -163,12 +164,12 @@ describe("MessageBuffer eviction by maxSize", () => {
 describe("MessageBuffer eviction by maxAge", () => {
     it("stale messages are removed after maxAge expires", async () => {
         const buf = new MessageBuffer(500, 50); // 50ms maxAge
-        buf.push("t1", { text: "old", timestamp: Date.now() });
+        buf.push("t1", msg("old"));
 
         await new Promise((r) => setTimeout(r, 80)); // wait for expiry
 
         // Trigger eviction by pushing another message
-        buf.push("t1", { text: "new", timestamp: Date.now() });
+        buf.push("t1", msg("new"));
 
         const { messages } = buf.read("t1");
         assert.equal(messages.length, 1);
@@ -177,16 +178,16 @@ describe("MessageBuffer eviction by maxAge", () => {
 
     it("thread is removed when all messages evicted by age", async () => {
         const buf = new MessageBuffer(500, 30); // 30ms maxAge
-        buf.push("t1", { text: "gone", timestamp: Date.now() });
+        buf.push("t1", msg("gone"));
 
         await new Promise((r) => setTimeout(r, 60));
 
         // Push to a different thread to avoid triggering eviction on t1
-        buf.push("t2", { text: "trigger", timestamp: Date.now() });
+        buf.push("t2", msg("trigger"));
 
         // t1 still has stale message but won't be cleaned unless _evict("t1") runs
         // Push to t1 to trigger cleanup
-        buf.push("t1", { text: "trigger-clean", timestamp: Date.now() });
+        buf.push("t1", msg("trigger-clean"));
 
         const { messages } = buf.read("t1");
         // Only new message should remain
@@ -250,6 +251,7 @@ describe("MessageBuffer getStats", () => {
 
         const stats = buf.getStats(cursor);
         const t1 = stats.find((s) => s.threadId === "t1");
+        assert.ok(t1);
         assert.equal(t1.unread, 1);
         assert.equal(t1.total, 2);
     });
@@ -268,8 +270,8 @@ describe("MessageBuffer getStats", () => {
 describe("MessageBuffer getThreadType", () => {
     it("returns threadType from first buffered message", () => {
         const buf = new MessageBuffer();
-        buf.push("t1", { text: "hi", threadType: "dm", timestamp: Date.now() });
-        buf.push("t1", { text: "hey", threadType: "dm", timestamp: Date.now() });
+        buf.push("t1", makeMessage({ text: "hi", threadType: "dm" }));
+        buf.push("t1", makeMessage({ text: "hey", threadType: "dm" }));
         assert.equal(buf.getThreadType("t1"), "dm");
     });
 
@@ -280,13 +282,14 @@ describe("MessageBuffer getThreadType", () => {
 
     it("returns null when thread exists but messages have no threadType", () => {
         const buf = new MessageBuffer();
+        // @ts-expect-error deliberately omits threadType: a buffered message without one must yield null
         buf.push("t1", { text: "hi", timestamp: Date.now() });
         assert.equal(buf.getThreadType("t1"), null);
     });
 
     it("returns group for group thread", () => {
         const buf = new MessageBuffer();
-        buf.push("g1", { text: "hello", threadType: "group", timestamp: Date.now() });
+        buf.push("g1", makeMessage({ text: "hello", threadType: "group" }));
         assert.equal(buf.getThreadType("g1"), "group");
     });
 });

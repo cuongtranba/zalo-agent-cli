@@ -4,7 +4,14 @@
  * Provides fuzzy Vietnamese-aware search for thread discovery.
  */
 
-import type { API } from "zca-js";
+/** The parts of the zca-js API (and of their responses) the cache reads. */
+export interface ThreadNameApi {
+    getAllGroups(): Promise<{ gridVerMap?: Record<string, unknown> }>;
+    getGroupInfo(
+        groupIds: string[],
+    ): Promise<{ gridInfoMap?: Record<string, { name?: string; totalMember?: number }> }>;
+    getAllFriends(): Promise<Array<{ userId?: string; displayName?: string; zaloName?: string }>>;
+}
 
 /** Cached info for one thread. */
 export interface ThreadInfo {
@@ -37,7 +44,7 @@ export class ThreadNameCache {
      * Batches group info requests (50 per batch) to avoid rate limits.
      * @param {object} api - zca-js API instance
      */
-    async init(api: API): Promise<void> {
+    async init(api: ThreadNameApi): Promise<void> {
         const start = Date.now();
         let groupCount = 0;
         let friendCount = 0;

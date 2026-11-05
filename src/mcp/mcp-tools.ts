@@ -9,7 +9,7 @@ import { rm } from "fs/promises";
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { Reactions, type API, type MessageContent, type Message } from "zca-js";
+import { Reactions, type API, type MessageContent, type Message, type ThreadType } from "zca-js";
 import { downloadMedia, openFile } from "./media-downloader.ts";
 import { createAttachmentDir, resolveAttachmentSources } from "./attachment-source.ts";
 import { QUOTE_SOURCE } from "./normalize-message.ts";
@@ -19,6 +19,25 @@ import type { ThreadFilter } from "./thread-filter.ts";
 import type { ThreadNameCache } from "./thread-name-cache.ts";
 import { extractMessageText } from "../utils/extract-message-text.ts";
 import { errorMessage } from "../utils/error-message.ts";
+
+/** The part of zca-js's Listener the history tool uses to page through old messages. */
+export interface HistoryListener {
+    on(event: "old_messages", handler: (messages: Message[]) => void): unknown;
+    removeListener(event: "old_messages", handler: (messages: Message[]) => void): unknown;
+    requestOldMessages(threadType: ThreadType, lastMsgId?: string | null): void;
+}
+
+/** The zca-js API surface the MCP tools call. */
+export type ToolsApi = Pick<
+    API,
+    | "sendMessage"
+    | "addReaction"
+    | "getAllFriends"
+    | "getAllGroups"
+    | "getGroupInfo"
+    | "getGroupMembersInfo"
+    | "getUserInfo"
+> & { listener: HistoryListener };
 
 /** Thread type constants matching zca-js ThreadType enum */
 const THREAD_USER = 0;
@@ -96,7 +115,7 @@ export function readBufferedMessages(
  */
 export function registerTools(
     server: McpServer,
-    getApi: () => API,
+    getApi: () => ToolsApi,
     buffer: MessageBuffer,
     _filter: ThreadFilter,
     config: MCPServerConfig,

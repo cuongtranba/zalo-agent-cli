@@ -1,9 +1,9 @@
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
 import { ThreadFilter } from "./thread-filter.ts";
 
 /** Helper: create a ThreadFilter with given patterns and keywords */
-function makeFilter(watchThreads = ["dm:*", "group:*"], triggerKeywords = []) {
+function makeFilter(watchThreads = ["dm:*", "group:*"], triggerKeywords: string[] = []) {
     return new ThreadFilter({ watchThreads, triggerKeywords });
 }
 

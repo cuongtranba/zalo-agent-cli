@@ -13,12 +13,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import type { Server } from "http";
-import type { API } from "zca-js";
 import type { Request, Response } from "express";
 import type { MessageBuffer } from "./message-buffer.ts";
 import type { ThreadFilter } from "./thread-filter.ts";
 import type { ThreadNameCache } from "./thread-name-cache.ts";
 import type { InboxSubscribers } from "./mcp-resources.ts";
+import type { ToolsApi } from "./mcp-tools.ts";
 import type { RegisterServerFn } from "./mcp-setup.ts";
 import { parseDuration, type MCPServerConfig } from "./mcp-config.ts";
 import pkg from "../../package.json" with { type: "json" };
@@ -31,7 +31,7 @@ const MAX_SWEEP_INTERVAL_MS = 60 * 1000;
 const MIN_SWEEP_INTERVAL_MS = 50;
 
 export interface HTTPServerDeps {
-    getApi: () => API;
+    getApi: () => ToolsApi;
     buffer: MessageBuffer;
     filter: ThreadFilter;
     config: MCPServerConfig;

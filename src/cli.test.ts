@@ -3,17 +3,17 @@
  * without requiring a Zalo session.
  */
 
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "child_process";
 import fs from "fs";
 import os from "os";
 import { resolve, join } from "path";
 
-const CLI = resolve(import.meta.dirname, "index.js");
+const CLI = resolve(import.meta.dirname, "index.ts");
 
-function run(...args) {
-    return execFileSync("node", [CLI, ...args], {
+function run(...args: string[]) {
+    return execFileSync(process.execPath, [CLI, ...args], {
         encoding: "utf-8",
         timeout: 10000,
         env: { ...process.env, HOME: "/tmp/zalo-agent-cli-test-home" },
@@ -101,10 +101,10 @@ describe("CLI interface", () => {
     it("mcp start exits 78 and asks to log in when there is no Zalo session (regression: pm2 crash loop)", () => {
         const home = fs.mkdtempSync(join(os.tmpdir(), "zalo-agent-cli-mcp-"));
         try {
-            const result = spawnSync("node", [CLI, "mcp", "start"], {
+            const result = spawnSync(process.execPath, [CLI, "mcp", "start"], {
                 encoding: "utf-8",
                 timeout: 15000,
-                stdin: "ignore",
+                stdio: ["ignore", "pipe", "pipe"],
                 env: { ...process.env, HOME: home },
             });
             assert.equal(result.status, 78);

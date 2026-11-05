@@ -4,12 +4,11 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { API } from "zca-js";
 import type { MessageBuffer } from "./message-buffer.ts";
 import type { MCPServerConfig } from "./mcp-config.ts";
 import type { ThreadFilter } from "./thread-filter.ts";
 import type { ThreadNameCache } from "./thread-name-cache.ts";
-import { registerTools } from "./mcp-tools.ts";
+import { registerTools, type ToolsApi } from "./mcp-tools.ts";
 import { registerInboxResource, type InboxSubscribers } from "./mcp-resources.ts";
 
 export interface ZaloServerOptions {
@@ -19,7 +18,7 @@ export interface ZaloServerOptions {
 /** Registers tools and resources on a McpServer instance (one per client session). */
 export type RegisterServerFn = (
     server: McpServer,
-    getApi: () => API,
+    getApi: () => ToolsApi,
     buffer: MessageBuffer,
     filter: ThreadFilter,
     config: MCPServerConfig,

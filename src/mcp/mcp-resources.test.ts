@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -8,17 +8,22 @@ import { registerZaloServer } from "./mcp-setup.ts";
 import { InboxSubscribers } from "./mcp-resources.ts";
 import { ZaloNotifier } from "./notifier.ts";
 import { MessageBuffer } from "./message-buffer.ts";
+import { ThreadFilter } from "./thread-filter.ts";
+import { makeMessage, makeToolsApi } from "./test-fixtures.ts";
+import type { MessageContent, SendMessageResponse } from "zca-js";
 
-const MESSAGE = { id: "m1", threadId: "g1", threadType: "group", content: "hello", timestamp: Date.now() };
+const MESSAGE = makeMessage({ id: "m1", threadId: "g1", threadType: "group", text: "hello" });
 
 /** Connect a real Client to a McpServer set up like production; resolves update URIs via `updates` */
-async function connect(buffer, inboxSubscribers) {
+async function connect(buffer: MessageBuffer, inboxSubscribers?: InboxSubscribers) {
     const server = new McpServer({ name: "test", version: "0.0.0" });
-    registerZaloServer(server, () => ({}), buffer, {}, {}, undefined, { inboxSubscribers });
+    registerZaloServer(server, () => makeToolsApi(), buffer, new ThreadFilter({ watchThreads: [] }), {}, undefined, {
+        inboxSubscribers,
+    });
     const client = new Client({ name: "test-client", version: "0.0.0" });
-    const updates = [];
-    let notify;
-    const nextUpdate = new Promise((resolve) => (notify = resolve));
+    const updates: string[] = [];
+    let notify: (uri: string) => void = () => {};
+    const nextUpdate = new Promise<string>((resolve) => (notify = resolve));
     client.setNotificationHandler(ResourceUpdatedNotificationSchema, (n) => {
         updates.push(n.params.uri);
         notify(n.params.uri);
@@ -45,10 +50,10 @@ test("reading zalo://inbox returns buffered messages in the zalo_get_messages sh
     const { client } = await connect(buffer);
 
     const { contents } = await client.readResource({ uri: "zalo://inbox" });
-    const inbox = JSON.parse(contents[0].text);
+    const inbox = JSON.parse((contents[0] as { text: string }).text);
 
     assert.equal(inbox.messages.length, 1);
-    assert.equal(inbox.messages[0].content, "hello");
+    assert.equal(inbox.messages[0].text, "hello");
     assert.equal(inbox.cursor, inbox.messages[0]._cursor);
     assert.equal(inbox.hasMore, false);
     await client.close();
@@ -69,14 +74,16 @@ test("an unsubscribed client receives no inbox updates", { timeout: 5000 }, asyn
 });
 
 /** A notifier sharing `inboxSubscribers`, whose Zalo-group sends resolve `firstSend` */
-function makeNotifier(inboxSubscribers) {
-    const sent = [];
-    let notifySent;
-    const firstSend = new Promise((resolve) => (notifySent = resolve));
+function makeNotifier(inboxSubscribers: InboxSubscribers) {
+    const sent: string[] = [];
+    let notifySent: () => void = () => {};
+    const firstSend = new Promise<void>((resolve) => (notifySent = resolve));
     const api = {
-        sendMessage: async (text) => {
-            sent.push(text);
+        sendMessage: async (message: string | MessageContent) => {
+            sent.push(String(message));
             notifySent();
+            const response: SendMessageResponse = { message: null, attachment: [] };
+            return response;
         },
     };
     const config = { notify: { enabled: true, thread: "notify_group", on: ["dm"], cooldown: "20ms" } };
@@ -92,7 +99,7 @@ test(
         const inboxSubscribers = new InboxSubscribers();
         const { client } = await connect(new MessageBuffer(), inboxSubscribers);
         const { notifier, sent, firstSend } = makeNotifier(inboxSubscribers);
-        const dm = { threadType: "dm", senderId: "u1", senderName: "Alice", text: "hi" };
+        const dm = makeMessage({ threadType: "dm", senderId: "u1", senderName: "Alice", text: "hi" });
 
         await client.subscribeResource({ uri: "zalo://inbox" });
         notifier.onMessage(dm);
@@ -116,7 +123,7 @@ test("the Zalo-group notifier resumes when a subscribed client disconnects", { t
 
     await client.subscribeResource({ uri: "zalo://inbox" });
     await client.close();
-    notifier.onMessage({ threadType: "dm", senderId: "u1", senderName: "Alice", text: "hi" });
+    notifier.onMessage(makeMessage({ threadType: "dm", senderId: "u1", senderName: "Alice", text: "hi" }));
     await firstSend;
 
     assert.equal(sent.length, 1);

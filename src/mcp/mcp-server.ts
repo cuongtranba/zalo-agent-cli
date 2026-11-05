@@ -5,11 +5,11 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type { API } from "zca-js";
 import type { MessageBuffer } from "./message-buffer.ts";
 import type { MCPServerConfig } from "./mcp-config.ts";
 import type { ThreadFilter } from "./thread-filter.ts";
 import type { ThreadNameCache } from "./thread-name-cache.ts";
+import type { ToolsApi } from "./mcp-tools.ts";
 import { registerZaloServer, type ZaloServerOptions } from "./mcp-setup.ts";
 import pkg from "../../package.json" with { type: "json" };
 
@@ -19,7 +19,7 @@ import pkg from "../../package.json" with { type: "json" };
  * @param getApi - Returns the current zca-js API instance
  */
 export async function createMCPServer(
-    getApi: () => API,
+    getApi: () => ToolsApi,
     buffer: MessageBuffer,
     filter: ThreadFilter,
     config: MCPServerConfig,

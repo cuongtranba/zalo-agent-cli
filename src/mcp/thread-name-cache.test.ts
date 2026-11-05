@@ -1,14 +1,17 @@
-import { describe, it, beforeEach } from "node:test";
+import { describe, it, beforeEach } from "bun:test";
 import assert from "node:assert/strict";
-import { ThreadNameCache } from "./thread-name-cache.ts";
+import { ThreadNameCache, type ThreadNameApi } from "./thread-name-cache.ts";
 
 /** Create a mock API that returns predictable group/friend data */
-function createMockApi(groups = {}, friends = []) {
+function createMockApi(
+    groups: Record<string, { name: string; totalMember?: number }> = {},
+    friends: Awaited<ReturnType<ThreadNameApi["getAllFriends"]>> = [],
+): ThreadNameApi {
     return {
         getAllGroups: async () => ({
             gridVerMap: Object.fromEntries(Object.keys(groups).map((id) => [id, 1])),
         }),
-        getGroupInfo: async (ids) => ({
+        getGroupInfo: async (ids: string[]) => ({
             gridInfoMap: Object.fromEntries(ids.filter((id) => groups[id]).map((id) => [id, groups[id]])),
         }),
         getAllFriends: async () => friends,
@@ -16,7 +19,7 @@ function createMockApi(groups = {}, friends = []) {
 }
 
 describe("ThreadNameCache", () => {
-    let cache;
+    let cache: ThreadNameCache;
 
     beforeEach(() => {
         cache = new ThreadNameCache();
@@ -52,7 +55,8 @@ describe("ThreadNameCache", () => {
     });
 
     it("handles API failures gracefully", async () => {
-        const api = {
+        const api: ThreadNameApi = {
+            ...createMockApi(),
             getAllGroups: async () => {
                 throw new Error("network error");
             },
@@ -127,8 +131,8 @@ describe("ThreadNameCache", () => {
 
             cache.set("g1", { name: "New Name" });
             assert.equal(cache.getName("g1"), "New Name");
-            assert.equal(cache.get("g1").type, "group");
-            assert.equal(cache.get("g1").memberCount, 5);
+            assert.equal(cache.get("g1")?.type, "group");
+            assert.equal(cache.get("g1")?.memberCount, 5);
         });
 
         it("adds new entry", () => {

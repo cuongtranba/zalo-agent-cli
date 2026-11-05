@@ -1,6 +1,7 @@
-import { test } from "node:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import type { AddressInfo } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -8,6 +9,9 @@ import { createHTTPServer } from "./mcp-http-transport.ts";
 import { registerZaloServer } from "./mcp-setup.ts";
 import { InboxSubscribers } from "./mcp-resources.ts";
 import { MessageBuffer } from "./message-buffer.ts";
+import { ThreadFilter } from "./thread-filter.ts";
+import type { HTTPServerDeps } from "./mcp-http-transport.ts";
+import { makeMessage, makeToolsApi } from "./test-fixtures.ts";
 
 const TOKEN = "secret-token";
 
@@ -26,13 +30,19 @@ const TOOL_NAMES = [
     "zalo_view_media",
 ];
 
-const deps = { getApi: () => ({}), buffer: new MessageBuffer(), filter: {}, config: {}, nameCache: null };
+const deps: HTTPServerDeps = {
+    getApi: () => makeToolsApi(),
+    buffer: new MessageBuffer(),
+    filter: new ThreadFilter({ watchThreads: [] }),
+    config: {},
+};
 
 /** Start the HTTP server on an ephemeral loopback port and return it with its MCP URL */
-async function startServer(authToken, extraDeps = {}) {
+async function startServer(authToken: string | null, extraDeps: Partial<HTTPServerDeps> = {}) {
     const server = createHTTPServer(registerZaloServer, { ...deps, ...extraDeps }, 0, authToken);
     await once(server, "listening");
-    return { server, url: `http://127.0.0.1:${server.address().port}/mcp` };
+    const { port } = server.address() as AddressInfo;
+    return { server, url: `http://127.0.0.1:${port}/mcp` };
 }
 
 test("HTTP MCP rejects requests without the bearer token and serves all tools with it", async () => {
@@ -70,7 +80,7 @@ test(
         const { server, url } = await startServer(TOKEN);
         const client = new Client({ name: "test-client", version: "0.0.0" });
         try {
-            let updatedUri = null;
+            let updatedUri: string | null = null;
             client.setNotificationHandler(ResourceUpdatedNotificationSchema, (n) => {
                 updatedUri = n.params.uri;
             });
@@ -84,7 +94,10 @@ test(
             // The client opens its GET stream asynchronously after initialize and notifications sent before it
             // is open are dropped, so keep pushing across request round-trips until one gets through.
             while (!updatedUri) {
-                deps.buffer.push("g1", { id: "m1", threadId: "g1", threadType: "group", content: "hi", timestamp: 1 });
+                deps.buffer.push(
+                    "g1",
+                    makeMessage({ id: "m1", threadId: "g1", threadType: "group", text: "hi", timestamp: 1 }),
+                );
                 await client.ping();
             }
 
@@ -112,7 +125,7 @@ test(
             inboxSubscribers,
         });
         const healthUrl = url.replace("/mcp", "/health");
-        const sessionCount = async () => (await (await fetch(healthUrl)).json()).sessions;
+        const sessionCount = async () => ((await (await fetch(healthUrl)).json()) as { sessions: number }).sessions;
         const client = new Client({ name: "test-client", version: "0.0.0" });
         try {
             // A client that initializes and subscribes but then vanishes without a DELETE or an open stream

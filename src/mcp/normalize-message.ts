@@ -2,7 +2,7 @@
  * Normalize raw zca-js message events into the MCP buffer's message shape.
  */
 
-import type { Message, SendMessageQuote } from "zca-js";
+import type { Message, SendMessageQuote, ThreadType } from "zca-js";
 import { extractMessageText } from "../utils/extract-message-text.ts";
 
 /**
@@ -37,7 +37,17 @@ export interface NormalizedMessage {
  * @param {object} msg - Raw zca-js message event
  * @returns {object} Normalized message
  */
-export function normalizeMessage(msg: Message): NormalizedMessage {
+/** The fields of a zca-js message event that normalizeMessage reads. */
+export interface RawMessageEvent {
+    threadId: string;
+    type: ThreadType;
+    data: Pick<
+        Message["data"],
+        "msgId" | "cliMsgId" | "uidFrom" | "dName" | "content" | "msgType" | "ts" | "ttl" | "propertyExt"
+    > & { quote?: Message["data"]["quote"] };
+}
+
+export function normalizeMessage(msg: RawMessageEvent): NormalizedMessage {
     const data = msg.data;
     const rawContent = data.content;
     // Non-text content is a loosely typed payload; link/file messages carry href and title

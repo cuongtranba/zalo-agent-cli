@@ -5,6 +5,9 @@
  */
 
 import type { API } from "zca-js";
+
+/** The only part of the zca-js API the notifier uses. */
+type NotifierApi = Pick<API, "sendMessage">;
 import { parseDuration, type MCPConfig } from "./mcp-config.ts";
 import type { NormalizedMessage } from "./normalize-message.ts";
 
@@ -38,7 +41,7 @@ export interface NotifierOptions {
 }
 
 export class ZaloNotifier {
-    _getApi: () => API;
+    _getApi: () => NotifierApi;
     _enabled: boolean;
     _notifyThread: string | null;
     _onTypes: Set<string>;
@@ -54,7 +57,7 @@ export class ZaloNotifier {
      * @param options - inboxSubscribers suppresses notifications while any subscriber exists
      */
     constructor(
-        getApi: () => API,
+        getApi: () => NotifierApi,
         config: { notify?: Partial<MCPConfig["notify"]> },
         { inboxSubscribers = null }: NotifierOptions = {},
     ) {
