@@ -13,8 +13,9 @@ import { registerInboxResource } from "./mcp-resources.js";
  * @param {import("./thread-filter.js").ThreadFilter} filter
  * @param {object} config - MCP config
  * @param {import("./thread-name-cache.js").ThreadNameCache} [nameCache]
+ * @param {{ inboxSubscribers?: import("./mcp-resources.js").InboxSubscribers }} [options]
  */
-export function registerZaloServer(server, getApi, buffer, filter, config, nameCache) {
+export function registerZaloServer(server, getApi, buffer, filter, config, nameCache, options = {}) {
     registerTools(server, getApi, buffer, filter, config, nameCache);
-    registerInboxResource(server, buffer, config, nameCache);
+    registerInboxResource(server, buffer, config, nameCache, options.inboxSubscribers);
 }

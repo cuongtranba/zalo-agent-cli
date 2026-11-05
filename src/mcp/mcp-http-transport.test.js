@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { createHTTPServer } from "./mcp-http-transport.js";
 import { registerZaloServer } from "./mcp-setup.js";
+import { InboxSubscribers } from "./mcp-resources.js";
 import { MessageBuffer } from "./message-buffer.js";
 
 const TOKEN = "secret-token";
@@ -28,8 +29,8 @@ const TOOL_NAMES = [
 const deps = { getApi: () => ({}), buffer: new MessageBuffer(), filter: {}, config: {}, nameCache: null };
 
 /** Start the HTTP server on an ephemeral loopback port and return it with its MCP URL */
-async function startServer(authToken) {
-    const server = createHTTPServer(registerZaloServer, deps, 0, authToken);
+async function startServer(authToken, extraDeps = {}) {
+    const server = createHTTPServer(registerZaloServer, { ...deps, ...extraDeps }, 0, authToken);
     await once(server, "listening");
     return { server, url: `http://127.0.0.1:${server.address().port}/mcp` };
 }
@@ -88,6 +89,82 @@ test(
             }
 
             assert.equal(updatedUri, "zalo://inbox");
+        } finally {
+            await client.close();
+            server.close();
+        }
+    },
+);
+
+const MCP_HEADERS = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    authorization: `Bearer ${TOKEN}`,
+};
+
+test(
+    "an idle HTTP session expires and releases its resources while a connected client keeps working",
+    { timeout: 10000 },
+    async () => {
+        const inboxSubscribers = new InboxSubscribers();
+        const { server, url } = await startServer(TOKEN, {
+            config: { limits: { sessionIdleTimeout: "300ms" } },
+            inboxSubscribers,
+        });
+        const healthUrl = url.replace("/mcp", "/health");
+        const sessionCount = async () => (await (await fetch(healthUrl)).json()).sessions;
+        const client = new Client({ name: "test-client", version: "0.0.0" });
+        try {
+            // A client that initializes and subscribes but then vanishes without a DELETE or an open stream
+            const init = await fetch(url, {
+                method: "POST",
+                headers: MCP_HEADERS,
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    id: 1,
+                    method: "initialize",
+                    params: {
+                        protocolVersion: "2025-03-26",
+                        capabilities: {},
+                        clientInfo: { name: "abandoned", version: "0.0.0" },
+                    },
+                }),
+            });
+            await init.text();
+            const abandonedId = init.headers.get("mcp-session-id");
+            assert.ok(abandonedId);
+            const sub = await fetch(url, {
+                method: "POST",
+                headers: { ...MCP_HEADERS, "mcp-session-id": abandonedId },
+                body: JSON.stringify({
+                    jsonrpc: "2.0",
+                    id: 2,
+                    method: "resources/subscribe",
+                    params: { uri: "zalo://inbox" },
+                }),
+            });
+            await sub.text();
+            assert.equal(inboxSubscribers.count(), 1);
+
+            // A live client holds its GET stream open, so it must not expire
+            await client.connect(
+                new StreamableHTTPClientTransport(new URL(url), {
+                    requestInit: { headers: { Authorization: `Bearer ${TOKEN}` } },
+                }),
+            );
+            assert.equal(await sessionCount(), 2);
+
+            while ((await sessionCount()) > 1) await new Promise((r) => setTimeout(r, 25));
+
+            const gone = await fetch(url, {
+                method: "POST",
+                headers: { ...MCP_HEADERS, "mcp-session-id": abandonedId },
+                body: JSON.stringify({ jsonrpc: "2.0", id: 3, method: "ping" }),
+            });
+            assert.equal(gone.status, 404);
+            assert.equal(inboxSubscribers.count(), 0);
+            const { tools } = await client.listTools();
+            assert.equal(tools.length, TOOL_NAMES.length);
         } finally {
             await client.close();
             server.close();

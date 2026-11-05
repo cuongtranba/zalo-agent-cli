@@ -19,6 +19,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Idle HTTP MCP sessions now expire (`limits.sessionIdleTimeout`, default 30m) instead of accumulating forever when a client disappears without closing its session. `/health` reports the open `sessions` count.
+- The Zalo-group notifier now actually suppresses notifications while an MCP client is subscribed to `zalo://inbox` (previously it never knew about connected agents and always sent).
+- The notifier no longer drops messages that arrive while a notification is being sent; they go out in the next batch.
 - `mcp start` no longer crash-loops under a process manager when the saved Zalo session is expired or missing: it prints the reason once and exits with code 78 (start pm2 with `--stop-exit-codes 78`). Transient network failures still exit with code 1 so the process manager retries.
 - MCP tools, HTTP transport and notifier used the Zalo session captured at startup, so every call failed after an automatic re-login. They now resolve the current session per call.
 - `mcp start` no longer prints the auto-login line or the update notice to stdout (the stdio protocol channel).

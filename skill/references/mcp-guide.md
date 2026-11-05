@@ -58,8 +58,8 @@ zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # mở ra mạng
 - Mặc định server chỉ bind `127.0.0.1`. Dùng `--host 0.0.0.0` để agent ở máy khác kết nối được.
 - Nếu bind vào địa chỉ không phải loopback (`127.0.0.1`, `::1`, `localhost`) mà **không có `--auth`**, server từ chối khởi động.
 - Mọi request tới `/mcp` phải có header `Authorization: Bearer <token>`, sai hoặc thiếu sẽ nhận `401`.
-- `GET /health` không cần token, trả về `{ "status": "ok", "uptime": ..., "threads": ... }` để dùng cho health check.
-- Server chạy theo session: `POST /mcp` với request `initialize` tạo session và trả header `mcp-session-id`; mọi request sau (`POST`, `GET` mở luồng SSE nhận thông báo, `DELETE` kết thúc session) phải gửi lại header này, nếu không sẽ nhận `400`, session không tồn tại nhận `404`. Các MCP client chuẩn (SDK) tự xử lý việc này. Mọi session dùng chung buffer và luôn dùng phiên Zalo hiện tại (kể cả sau khi tự đăng nhập lại).
+- `GET /health` không cần token, trả về `{ "status": "ok", "uptime": ..., "threads": ..., "sessions": ... }` để dùng cho health check.
+- Server chạy theo session: `POST /mcp` với request `initialize` tạo session và trả header `mcp-session-id`; mọi request sau (`POST`, `GET` mở luồng SSE nhận thông báo, `DELETE` kết thúc session) phải gửi lại header này, nếu không sẽ nhận `400`, session không tồn tại nhận `404`. Các MCP client chuẩn (SDK) tự xử lý việc này. Mọi session dùng chung buffer và luôn dùng phiên Zalo hiện tại (kể cả sau khi tự đăng nhập lại). Session không còn request nào đang mở (kể cả luồng `GET`) quá `limits.sessionIdleTimeout` (mặc định 30 phút) sẽ bị đóng; client sau đó nhận `404` và chỉ cần `initialize` lại (SDK chuẩn tự làm khi kết nối lại).
 - Nên đặt reverse proxy HTTPS (nginx, Caddy) phía trước khi mở ra Internet.
 
 ### Chạy nền bằng pm2
@@ -318,7 +318,8 @@ File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo �
     "maxMessagesPerPoll": 20,
     "autoDigestThreshold": 50,
     "bufferMaxAge": "2h",
-    "bufferMaxSize": 500
+    "bufferMaxSize": 500,
+    "sessionIdleTimeout": "30m"
   },
   "media": {
     "downloadDir": null,
@@ -332,13 +333,14 @@ File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo �
 | `watchThreads` | Pattern thread cần theo dõi: `dm:*`, `group:*`, `dm:<id>`, `group:<id>` |
 | `mode`, `limits.autoDigestThreshold` | Dành riêng cho tính năng sau, hiện chưa có tác dụng |
 | `triggerKeywords` | Từ khoá đánh dấu tin cần agent chú ý |
-| `notify.enabled` | Bật gửi thông báo vào nhóm Zalo khi có tin mới lúc agent offline |
+| `notify.enabled` | Bật gửi thông báo vào nhóm Zalo, chỉ gửi khi không có client nào đang subscribe `zalo://inbox` |
 | `notify.thread` | ID nhóm nhận thông báo |
 | `notify.on` | Loại thread kích hoạt thông báo (`dm`, `group`) |
 | `notify.cooldown` | Gộp thông báo trong khoảng này (`30s`, `5m`, `1h`) |
 | `limits.maxMessagesPerPoll` | Số tin mặc định mỗi lần `zalo_get_messages` |
 | `limits.bufferMaxAge` | Tuổi tối đa của tin trong buffer (`2h`) |
 | `limits.bufferMaxSize` | Số tin tối đa mỗi thread trong buffer |
+| `limits.sessionIdleTimeout` | Thời gian session HTTP không có request nào đang mở thì bị đóng (`30m`, mặc định) |
 | `media.downloadDir` | Thư mục lưu media (mặc định `~/.zalo-agent-cli/media/`) |
 | `media.autoOpen` | Mặc định mở media sau khi tải |
 
@@ -360,7 +362,7 @@ Claude Code / agent của bạn
 
 - **Auto-reconnect**: WebSocket tự kết nối lại; khi phiên bị đóng, server đăng nhập lại và mọi tool dùng phiên mới
 - **Cursor-based**: Client đọc tăng dần, không bỏ sót tin
-- **Session HTTP**: mỗi client có một session (`mcp-session-id`); tin nhắn vẫn nằm trong buffer chung nên session mất đi không làm mất tin
+- **Session HTTP**: mỗi client có một session (`mcp-session-id`); tin nhắn vẫn nằm trong buffer chung nên session mất đi (kể cả bị đóng do idle) không làm mất tin
 
 ---
 

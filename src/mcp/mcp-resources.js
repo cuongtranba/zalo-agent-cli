@@ -15,14 +15,36 @@ import { readBufferedMessages } from "./mcp-tools.js";
 export const INBOX_URI = "zalo://inbox";
 
 /**
+ * Tracks which MCP sessions are subscribed to zalo://inbox. Shared across sessions and transports so other
+ * parts (the Zalo-group notifier) can tell whether an agent will already receive a push.
+ */
+export class InboxSubscribers {
+    #sessions = new Set();
+
+    /** Idempotent: a session counts once however often it subscribes */
+    add(sessionKey) {
+        this.#sessions.add(sessionKey);
+    }
+
+    remove(sessionKey) {
+        this.#sessions.delete(sessionKey);
+    }
+
+    count() {
+        return this.#sessions.size;
+    }
+}
+
+/**
  * Register the inbox resource and its subscribe handlers on one server instance (= one client session).
  * Must run before the server connects to a transport.
  * @param {import("@modelcontextprotocol/sdk/server/mcp.js").McpServer} server
  * @param {import("./message-buffer.js").MessageBuffer} buffer
  * @param {object} config - MCP config
  * @param {import("./thread-name-cache.js").ThreadNameCache} [nameCache]
+ * @param {InboxSubscribers} [inboxSubscribers] - Updated as this session subscribes, unsubscribes or closes
  */
-export function registerInboxResource(server, buffer, config, nameCache) {
+export function registerInboxResource(server, buffer, config, nameCache, inboxSubscribers = new InboxSubscribers()) {
     const maxPerPoll = config.limits?.maxMessagesPerPoll ?? 20;
 
     server.registerResource(
@@ -51,15 +73,18 @@ export function registerInboxResource(server, buffer, config, nameCache) {
     server.server.registerCapabilities({ resources: { subscribe: true } });
 
     const subscribed = new Set();
+    const sessionKey = Symbol("inbox-session");
     server.server.setRequestHandler(SubscribeRequestSchema, async ({ params }) => {
         if (params.uri !== INBOX_URI) {
             throw new McpError(ErrorCode.InvalidParams, `Resource ${params.uri} not found or not subscribable`);
         }
         subscribed.add(params.uri);
+        inboxSubscribers.add(sessionKey);
         return {};
     });
     server.server.setRequestHandler(UnsubscribeRequestSchema, async ({ params }) => {
         subscribed.delete(params.uri);
+        if (subscribed.size === 0) inboxSubscribers.remove(sessionKey);
         return {};
     });
 
@@ -77,5 +102,6 @@ export function registerInboxResource(server, buffer, config, nameCache) {
         previousOnClose?.();
         stopListening();
         subscribed.clear();
+        inboxSubscribers.remove(sessionKey);
     };
 }

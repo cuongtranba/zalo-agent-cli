@@ -11,6 +11,7 @@ import { ThreadFilter } from "../mcp/thread-filter.js";
 import { loadMCPConfig, parseDuration } from "../mcp/mcp-config.js";
 import { createMCPServer } from "../mcp/mcp-server.js";
 import { registerZaloServer } from "../mcp/mcp-setup.js";
+import { InboxSubscribers } from "../mcp/mcp-resources.js";
 import { createHTTPServer } from "../mcp/mcp-http-transport.js";
 import { ZaloNotifier } from "../mcp/notifier.js";
 import { normalizeMessage } from "../mcp/normalize-message.js";
@@ -74,6 +75,10 @@ export function registerMCPCommands(program) {
                 console.error("[mcp] Thread name cache init failed (non-fatal):", e.message);
             }
 
+            // Shared by every session and the notifier: the Zalo-group notification is skipped while a client
+            // is subscribed to zalo://inbox, because that client gets a push instead
+            const inboxSubscribers = new InboxSubscribers();
+
             // Start MCP server — stdio (default) or HTTP
             let httpServer = null;
             try {
@@ -83,20 +88,20 @@ export function registerMCPCommands(program) {
                         console.error(`[mcp] Invalid port: ${opts.http}. Must be 1-65535.`);
                         process.exit(1);
                     }
-                    const deps = { getApi, buffer, filter, config, nameCache };
+                    const deps = { getApi, buffer, filter, config, nameCache, inboxSubscribers };
                     const authToken = opts.auth?.trim() || null;
                     httpServer = createHTTPServer(registerZaloServer, deps, port, authToken, opts.host || "127.0.0.1");
                     console.error(`[mcp] HTTP server started on port ${port}`);
                 } else {
-                    await createMCPServer(getApi, buffer, filter, config, nameCache);
+                    await createMCPServer(getApi, buffer, filter, config, nameCache, { inboxSubscribers });
                 }
             } catch (e) {
                 console.error("[mcp] Failed to start MCP server:", e.message);
                 process.exit(1);
             }
 
-            // Setup notifier (sends to Zalo group when agent is offline)
-            const notifier = new ZaloNotifier(getApi, config);
+            // Setup notifier (sends to Zalo group when no client is subscribed to zalo://inbox)
+            const notifier = new ZaloNotifier(getApi, config, { inboxSubscribers });
 
             let reconnectCount = 0;
             let shuttingDown = false;
