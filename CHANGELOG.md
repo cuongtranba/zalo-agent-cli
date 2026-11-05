@@ -13,9 +13,11 @@ All notable changes to this project will be documented in this file.
 
 - `threadType` on `zalo_send_message`, `zalo_send_attachment`, `zalo_react` and `zalo_get_history` now also accepts `"dm"` / `"group"` (the values buffered messages carry) besides `0` / `1`. Numeric values and defaults are unchanged.
 - The npm package is renamed to `zalo-mcp` (the `zalo-agent` command is unchanged). Install with `bun add -g zalo-mcp`; `zalo-agent update` and the update check now use the `zalo-mcp` package. Config and credentials stay in `~/.zalo-agent-cli/`.
+- Documentation and CLI text are English only: the README is rewritten for agents, the startup disclaimer and `oa init` instructions drop the Vietnamese duplicates, and `AGENTS.md` / `CLAUDE.md` describe the project for coding agents.
 
 ### Removed
 
+- Donation section and QR image from the README.
 - ClawHub auto-publish workflow (`.github/workflows/clawhub-publish.yml`) and the `clawhub install zalo-agent` instructions. The `skill/` folder remains usable locally by agents.
 
 ### Added
@@ -27,7 +29,7 @@ All notable changes to this project will be documented in this file.
 - MCP tools: `zalo_send_attachment` (server paths or http(s) URLs, 25 MB cap), `zalo_react`, `zalo_list_conversations`, `zalo_get_group_members`, `zalo_get_user_info`.
 - `zalo_send_message` accepts `replyToMessageId` (quote a buffered message) and `mentions`.
 - Buffered MCP messages expose `cliMsgId`, `ts`, and `replyTo` (filled from the quoted message).
-- MCP guide: "Tích hợp vào agent qua HTTP" section, full tool reference for all 12 tools, corrected config keys and `/mcp` URL.
+- MCP guide: "Integrating an agent over HTTP" section, full tool reference for all 12 tools, corrected config keys and `/mcp` URL.
 - Tests for MCP tools and the HTTP transport.
 
 ### Changed

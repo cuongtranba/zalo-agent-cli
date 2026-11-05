@@ -66,28 +66,7 @@ Suppressions must be targeted and explain themselves, for example `// oxlint-dis
 
 ## Project Structure
 
-```
-src/
-├── index.ts              # CLI entry point (Commander.js)
-├── commands/             # One file per command group
-│   ├── login.ts          # login, logout, status, whoami
-│   ├── msg.ts            # message subcommands
-│   ├── friend.ts         # friend subcommands
-│   ├── group.ts          # group subcommands
-│   ├── conv.ts           # conversation subcommands
-│   └── account.ts        # account subcommands
-├── core/                 # Business logic (no CLI deps)
-│   ├── zalo-client.ts    # Direct zca-js wrapper
-│   ├── credentials.ts    # Credential storage (0600)
-│   └── accounts.ts       # Account registry
-├── mcp/                  # MCP server (stdio + HTTP)
-└── utils/                # Shared helpers
-    ├── output.ts         # JSON/human output formatter
-    ├── proxy-helpers.ts  # Proxy URL masking
-    ├── bank-helpers.ts   # Bank BIN mapping + VietQR
-    ├── qr-display.ts     # Cross-platform QR display
-    └── qr-http-server.ts # Local HTTP QR server
-```
+See the Layout section of [AGENTS.md](AGENTS.md).
 
 ## Adding a New Command
 

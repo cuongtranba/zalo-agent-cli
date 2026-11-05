@@ -306,7 +306,7 @@ Each scenario: user prompt → expected step-by-step reasoning → validation cr
 3. Start tunnel: `ngrok http 3000`
 4. Get ngrok URL from ngrok API or output
 5. Instruct user: set webhook URL at developers.zalo.me → Webhook
-6. Mention: need domain verification first, bật events (user_send_text, follow, etc.)
+6. Mention: need domain verification first, enable events (user_send_text, follow, etc.)
 
 **Must include:** `oa listen`, ngrok, domain verification, webhook URL setup at developers.zalo.me
 **Must NOT:** Skip domain verification step, forget to mention event toggling

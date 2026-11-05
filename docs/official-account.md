@@ -1,18 +1,18 @@
 # Zalo Official Account (OA)
 
-Quản lý Zalo Official Account qua API v3.0 chính thức. Độc lập hoàn toàn với tài khoản cá nhân (zca-js).
+Manage a Zalo Official Account through the official API v3.0. Fully independent from the personal account (zca-js).
 
-> **Lưu ý:** Một số API cần upgrade OA tier. Xem [zalo.cloud/oa/pricing](https://zalo.cloud/oa/pricing).
+> **Note:** Some APIs require a higher OA tier. See [zalo.cloud/oa/pricing](https://zalo.cloud/oa/pricing).
 
-## Bắt đầu nhanh
+## Quick start
 
-### Interactive (con người)
+### Interactive (humans)
 
 ```bash
 zalo-agent oa init
 ```
 
-Wizard hướng dẫn từng bước: nhập credentials → OAuth login → webhook setup.
+A step-by-step wizard: enter credentials → OAuth login → webhook setup.
 
 ### Non-interactive (AI agent / CI)
 
@@ -41,36 +41,36 @@ zalo-agent oa login --app-id <APP_ID> --secret <SECRET> --callback-host https://
 
 ---
 
-## Lệnh
+## Commands
 
 ### Setup & Auth
 
-| Lệnh | Mô tả |
+| Command | Description |
 |-------|--------|
 | `oa init` | Guided setup wizard (interactive + non-interactive) |
-| `oa login --app-id <id> --secret <key>` | OAuth login (mở browser) |
-| `oa login ... --callback-host <url>` | OAuth login từ VPS |
-| `oa refresh` | Làm mới access token (dùng refresh token) |
-| `oa setup <access-token>` | Set token thủ công (bỏ qua OAuth) |
-| `oa whoami` | Xem thông tin OA |
+| `oa login --app-id <id> --secret <key>` | OAuth login (opens a browser) |
+| `oa login ... --callback-host <url>` | OAuth login from a VPS |
+| `oa refresh` | Refresh the access token (uses the refresh token) |
+| `oa setup <access-token>` | Set the token manually (skips OAuth) |
+| `oa whoami` | Show OA info |
 
-### Tin nhắn
+### Messages
 
 ```bash
-# Gửi text (message type: cs | transaction | promotion)
-zalo-agent oa msg text <user-id> "Nội dung" [-m cs]
+# Send text (message type: cs | transaction | promotion)
+zalo-agent oa msg text <user-id> "Message text" [-m cs]
 
-# Gửi ảnh (URL hoặc attachment_id)
+# Send an image (URL or attachment_id)
 zalo-agent oa msg image <user-id> --image-url https://...
 zalo-agent oa msg image <user-id> --image-id <attachment_id>
 
-# Gửi file (cần upload trước)
+# Send a file (upload first)
 zalo-agent oa msg file <user-id> <file-id>
 
-# Gửi danh sách
+# Send a list
 zalo-agent oa msg list <user-id> '[{"title":"Item 1"},{"title":"Item 2"}]'
 
-# Kiểm tra trạng thái
+# Check delivery status
 zalo-agent oa msg status <message-id>
 ```
 
@@ -98,7 +98,7 @@ zalo-agent oa upload image ./photo.jpg    # Returns attachment_id
 zalo-agent oa upload file ./document.pdf  # Returns file token
 ```
 
-### Hội thoại
+### Conversations
 
 ```bash
 zalo-agent oa conv recent [--offset 0] [--count 10]
@@ -108,13 +108,13 @@ zalo-agent oa conv history <user-id> [--offset 0] [--count 10]
 ### Webhook Listener
 
 ```bash
-# Cơ bản
+# Basic
 zalo-agent oa listen -p 3000
 
-# Với MAC verification
+# With MAC verification
 zalo-agent oa listen -p 3000 -s <OA_SECRET_KEY>
 
-# Lọc events
+# Filter events
 zalo-agent oa listen -e user_send_text,follow
 
 # Domain verification
@@ -126,39 +126,39 @@ zalo-agent --json oa listen | while read -r event; do
 done
 ```
 
-**Events hỗ trợ:** `follow`, `unfollow`, `user_send_text`, `user_send_image`, `user_send_file`, `user_send_location`, `user_send_sticker`, `user_send_gif`, `user_click_button`, `user_click_link`
+**Supported events:** `follow`, `unfollow`, `user_send_text`, `user_send_image`, `user_send_file`, `user_send_location`, `user_send_sticker`, `user_send_gif`, `user_click_button`, `user_click_link`
 
-### Khác
+### Other
 
 ```bash
-zalo-agent oa menu '{"buttons":[...]}'         # Cập nhật menu OA
-zalo-agent oa article create '{"title":"..."}'  # Tạo bài viết
-zalo-agent oa article list                      # Danh sách bài viết
-zalo-agent oa store product-list                # Danh sách sản phẩm
-zalo-agent oa store category-list               # Danh mục
+zalo-agent oa menu '{"buttons":[...]}'         # Update the OA menu
+zalo-agent oa article create '{"title":"..."}'  # Create an article
+zalo-agent oa article list                      # List articles
+zalo-agent oa store product-list                # List products
+zalo-agent oa store category-list               # List categories
 ```
 
 ---
 
 ## Webhook Setup
 
-### Yêu cầu từ Zalo
+### Zalo requirements
 
-1. **Domain verification** — Zalo cần verify domain trước khi dùng webhook
-2. **HTTPS required** — webhook URL phải là HTTPS
-3. **IP Việt Nam** — để nhận đầy đủ thông tin user (tên, avatar, SĐT)
-4. **Trả về 200 OK** — trong vòng 5 giây
+1. **Domain verification** — Zalo must verify your domain before you can use webhooks
+2. **HTTPS required** — the webhook URL must be HTTPS
+3. **Vietnam IP** — needed to receive full user info (name, avatar, phone number)
+4. **Return 200 OK** — within 5 seconds
 
-### Các cách expose webhook
+### Ways to expose a webhook
 
-| Cách | Ưu điểm | Nhược điểm |
+| Option | Pros | Cons |
 |------|----------|------------|
-| **ngrok** | Nhanh nhất, 1 lệnh | IP Singapore, URL thay đổi mỗi lần |
-| **cloudflared** | Free, stable | Cần Cloudflare account |
-| **VPS** | IP VN, ổn định | Cần quản lý server |
-| **n8n** | Visual workflow | Cần deploy n8n |
+| **ngrok** | Fastest, one command | Singapore IP, URL changes on every run |
+| **cloudflared** | Free, stable | Needs a Cloudflare account |
+| **VPS** | Vietnam IP, stable | You manage the server |
+| **n8n** | Visual workflow | Needs an n8n deployment |
 
-### Với ngrok
+### With ngrok
 
 ```bash
 # Terminal 1: listener
@@ -168,19 +168,19 @@ zalo-agent oa listen -p 3000 --no-verify --verify-domain <CODE>
 ngrok http 3000
 ```
 
-### Với VPS (khuyến nghị cho production)
+### With a VPS (recommended for production)
 
 ```bash
-# Install trên VPS
+# Install on the VPS
 bun add -g zalo-mcp
 
-# Login từ VPS
+# Log in from the VPS
 zalo-agent oa login --app-id <ID> --secret <KEY> --callback-host https://your-vps.com
 
 # Run listener
 zalo-agent oa listen -p 3000 -s <SECRET>
 
-# Dùng systemd/pm2 để keep alive (pm2 chạy bằng Bun)
+# Keep it alive with systemd/pm2 (pm2 runs it via Bun)
 pm2 start zalo-agent --interpreter bun --name zalo-oa -- oa listen -p 3000 -s <SECRET>
 ```
 
@@ -188,7 +188,7 @@ pm2 start zalo-agent --interpreter bun --name zalo-oa -- oa listen -p 3000 -s <S
 
 ## Credentials
 
-Lưu tại `~/.zalo-agent/oa-credentials.json` (quyền 0600, chỉ owner đọc được).
+Stored at `~/.zalo-agent/oa-credentials.json` (mode 0600, readable only by the owner).
 
 ```json
 {
@@ -203,7 +203,7 @@ Lưu tại `~/.zalo-agent/oa-credentials.json` (quyền 0600, chỉ owner đọc
 }
 ```
 
-**Multi-OA:** Dùng `--oa-id` để quản lý nhiều OA:
+**Multi-OA:** use `--oa-id` to manage several OAs:
 
 ```bash
 zalo-agent oa login --app-id <ID1> --secret <KEY1> --oa-id shop1
@@ -225,12 +225,12 @@ zalo-agent oa whoami --oa-id shop2
 
 ---
 
-## So sánh
+## Comparison
 
 | | `zalo-agent` (personal) | `zalo-agent oa` (official) |
 |---|---|---|
 | API | Unofficial (zca-js) | Official (Zalo OA API v3.0) |
 | Auth | QR code login | OAuth 2.0 |
-| Scope | Tài khoản cá nhân | Official Account |
-| Risk | Có thể bị ban | An toàn, API chính thức |
+| Scope | Personal account | Official Account |
+| Risk | May get banned | Safe, official API |
 | Features | Chat, friend, group, poll... | Messaging, follower, tag, store, webhook |

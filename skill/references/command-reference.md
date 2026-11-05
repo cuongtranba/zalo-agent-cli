@@ -21,7 +21,7 @@
 | `send <id> <text> [-t 0\|1] [--react] [--mention pos:uid:len]` | Text message |
 | `send-image <id> <paths...> [-t] [-m caption]` | Images |
 | `send-file <id> <paths...> [-t] [-m caption]` | Files |
-| `send-card <id> <userId> [-t] [--phone]` | Contact card (danh thiếp) |
+| `send-card <id> <userId> [-t] [--phone]` | Contact card |
 | `send-bank <id> <accNum> --bank alias [-n name] [-t]` | Bank card (55+ VN banks) |
 | `send-qr-transfer <id> <accNum> --bank alias [-a amt] [-m content] [--template] [-t]` | VietQR image |
 | `send-voice <id> <voiceUrl> [-t]` | Voice from URL |

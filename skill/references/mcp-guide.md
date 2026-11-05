@@ -1,18 +1,18 @@
-# Hướng dẫn Zalo MCP Server
+# Zalo MCP Server Guide
 
-Model Context Protocol (MCP) cho phép Claude Code và các MCP client/agent tương tác với Zalo trực tiếp qua 12 tools: đọc, gửi tin, gửi file, thả reaction, tra cứu hội thoại, nhóm và người dùng.
+The Model Context Protocol (MCP) lets Claude Code and other MCP clients/agents work with Zalo directly through 12 tools: read and send messages, send files, add reactions, and look up conversations, groups, and users.
 
 ---
 
-## Khởi động nhanh
+## Quick start
 
-### Chế độ stdio (Local — Claude Code)
+### stdio mode (local — Claude Code)
 
 ```bash
 zalo-agent mcp start
 ```
 
-Thêm vào `.claude/settings.json`:
+Add to `.claude/settings.json`:
 
 ```json
 {
@@ -25,13 +25,13 @@ Thêm vào `.claude/settings.json`:
 }
 ```
 
-### Chế độ HTTP (VPS — Remote)
+### HTTP mode (VPS — remote)
 
 ```bash
 zalo-agent mcp start --http 3847 --auth your-secret
 ```
 
-Endpoint MCP là `http://<host>:<port>/mcp`. Thêm vào cấu hình MCP client:
+The MCP endpoint is `http://<host>:<port>/mcp`. Add to your MCP client config:
 
 ```json
 {
@@ -46,33 +46,33 @@ Endpoint MCP là `http://<host>:<port>/mcp`. Thêm vào cấu hình MCP client:
 
 ---
 
-## Tích hợp vào agent qua HTTP
+## Integrating an agent over HTTP
 
-### Khởi động server
+### Start the server
 
 ```bash
-zalo-agent mcp start --http 3847 --auth <token>                 # chỉ nghe 127.0.0.1
-zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # mở ra mạng
+zalo-agent mcp start --http 3847 --auth <token>                 # listens on 127.0.0.1 only
+zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # exposed to the network
 ```
 
-- Mặc định server chỉ bind `127.0.0.1`. Dùng `--host 0.0.0.0` để agent ở máy khác kết nối được.
-- Nếu bind vào địa chỉ không phải loopback (`127.0.0.1`, `::1`, `localhost`) mà **không có `--auth`**, server từ chối khởi động.
-- Mọi request tới `/mcp` phải có header `Authorization: Bearer <token>`, sai hoặc thiếu sẽ nhận `401`.
-- `GET /health` không cần token, trả về `{ "status": "ok", "uptime": ..., "threads": ..., "sessions": ... }` để dùng cho health check.
-- Server chạy theo session: `POST /mcp` với request `initialize` tạo session và trả header `mcp-session-id`; mọi request sau (`POST`, `GET` mở luồng SSE nhận thông báo, `DELETE` kết thúc session) phải gửi lại header này, nếu không sẽ nhận `400`, session không tồn tại nhận `404`. Các MCP client chuẩn (SDK) tự xử lý việc này. Mọi session dùng chung buffer và luôn dùng phiên Zalo hiện tại (kể cả sau khi tự đăng nhập lại). Session không còn request nào đang mở (kể cả luồng `GET`) quá `limits.sessionIdleTimeout` (mặc định 30 phút) sẽ bị đóng; client sau đó nhận `404` và chỉ cần `initialize` lại (SDK chuẩn tự làm khi kết nối lại).
-- Nên đặt reverse proxy HTTPS (nginx, Caddy) phía trước khi mở ra Internet.
+- By default the server binds only `127.0.0.1`. Use `--host 0.0.0.0` so agents on other machines can connect.
+- If you bind to a non-loopback address (anything other than `127.0.0.1`, `::1`, `localhost`) **without `--auth`**, the server refuses to start.
+- Every request to `/mcp` must carry the header `Authorization: Bearer <token>`; a missing or wrong token gets `401`.
+- `GET /health` needs no token and returns `{ "status": "ok", "uptime": ..., "threads": ..., "sessions": ... }` for health checks.
+- The server is session-based: a `POST /mcp` with an `initialize` request creates a session and returns the `mcp-session-id` header. Every later request (`POST`, `GET` to open the SSE notification stream, `DELETE` to end the session) must send this header back, otherwise it gets `400`; an unknown session gets `404`. Standard MCP clients (SDKs) handle this automatically. All sessions share one buffer and always use the current Zalo session (including after an automatic re-login). A session with no open request (including the `GET` stream) for longer than `limits.sessionIdleTimeout` (default 30 minutes) is closed; the client then gets `404` and only needs to `initialize` again (standard SDKs do this on reconnect).
+- Put an HTTPS reverse proxy (nginx, Caddy) in front when exposing the server to the Internet.
 
-### Chạy nền bằng pm2
+### Run in the background with pm2
 
 ```bash
 pm2 start zalo-agent --interpreter bun --name zalo-mcp --stop-exit-codes 78 -- mcp start --http 3847 --auth <token>
 ```
 
-- Mã thoát `78` nghĩa là session Zalo đã hết hạn hoặc không có: server in một dòng lỗi rồi dừng hẳn thay vì khởi động lại liên tục.
-- Cách xử lý: chạy `zalo-agent login`, sau đó `pm2 restart zalo-mcp`.
-- Lỗi mạng tạm thời vẫn thoát với mã `1` để pm2 tự thử lại.
+- Exit code `78` means the Zalo session has expired or is missing: the server prints one error line and stops for good instead of restarting in a loop.
+- Fix: run `zalo-agent login`, then `pm2 restart zalo-mcp`.
+- Transient network errors still exit with code `1`, so pm2 retries automatically.
 
-### Ví dụ client JavaScript
+### JavaScript client example
 
 ```js
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -87,221 +87,221 @@ await client.connect(transport);
 const { tools } = await client.listTools();
 console.log(tools.map((t) => t.name));
 
-// Đọc tin mới
+// Read new messages
 const res = await client.callTool({ name: "zalo_get_messages", arguments: { limit: 20 } });
 const { messages, cursor } = JSON.parse(res.content[0].text);
 
-// Trả lời tin đầu tiên (threadType: 0 = DM, 1 = nhóm)
+// Reply to the first message (threadType: 0 = DM, 1 = group)
 const m = messages[0];
 await client.callTool({
     name: "zalo_send_message",
     arguments: {
         threadId: m.threadId,
         threadType: m.threadType === "group" ? 1 : 0,
-        text: "Đã nhận!",
+        text: "Received!",
         replyToMessageId: m.id,
     },
 });
 
-// Đánh dấu đã đọc
+// Mark as read
 await client.callTool({ name: "zalo_mark_read", arguments: { cursor } });
 await client.close();
 ```
 
-Kết quả của mỗi tool là một khối `text` chứa JSON; khi lỗi, `isError` là `true` và text bắt đầu bằng `Error:`.
+Each tool result is a single `text` block containing JSON; on failure `isError` is `true` and the text starts with `Error:`.
 
-### Lưu ý khi tích hợp
+### Integration notes
 
-- **Reply và react chỉ hoạt động với tin nhắn nhận được khi server đang chạy** (còn trong buffer). Tin cũ lấy từ `zalo_get_history` không quote được; với `zalo_react` cần truyền thêm `cliMsgId` nếu biết.
-- **Nguồn của `zalo_send_attachment`** là đường dẫn tuyệt đối **trên máy chạy server** hoặc URL `http(s)`. URL được server tải về thư mục tạm (tối đa 25 MB, timeout 30 giây) rồi xoá sau khi gửi.
-- Buffer nằm trong bộ nhớ: khởi động lại server sẽ mất tin chưa đọc.
+- **Reply and react only work for messages received while the server is running** (still in the buffer). Older messages fetched via `zalo_get_history` cannot be quoted; for `zalo_react` also pass `cliMsgId` if you know it.
+- **Sources for `zalo_send_attachment`** are absolute paths **on the machine running the server** or `http(s)` URLs. The server downloads URLs to a temp directory (max 25 MB, 30 s timeout) and deletes them after sending.
+- The buffer is in memory: restarting the server loses unread messages.
 
 ---
 
-## Thông báo đẩy (resource `zalo://inbox`)
+## Push notifications (resource `zalo://inbox`)
 
-Server hỗ trợ cơ chế subscribe chuẩn của MCP (`resources/subscribe`) trên cả stdio và HTTP:
+The server supports standard MCP subscriptions (`resources/subscribe`) on both stdio and HTTP:
 
-- Resource `zalo://inbox` (`application/json`): đọc ra `{ messages, cursor, hasMore }` — cùng dạng với `zalo_get_messages` (các tin **mới nhất** chưa `zalo_mark_read`, tối đa `limits.inboxWindow`, mặc định 50, xếp từ cũ đến mới; `cursor` là cursor của tin mới nhất). Nếu giữa hai lần đọc lại có nhiều tin hơn cửa sổ này thì phần dư bị bỏ lỡ, nên hãy tăng `limits.inboxWindow`. `hasMore: true` nghĩa là còn tin cũ hơn nằm ngoài cửa sổ này — đọc chúng bằng `zalo_get_messages` (phân trang tiến theo `since`).
-- Client gọi `resources/subscribe` với `{ "uri": "zalo://inbox" }`. Mỗi khi có tin mới vào buffer, server gửi `notifications/resources/updated` với `uri` đó (không kèm nội dung tin).
-- Khi nhận thông báo, client đọc lại `zalo://inbox` hoặc gọi `zalo_get_messages` với `since` là cursor cuối cùng đã xử lý.
-- Thông báo là **best-effort** theo spec MCP (có thể mất khi mất kết nối, hoặc được gộp): luôn giữ polling bằng cursor làm nguồn sự thật.
-- Với HTTP, thông báo đi qua luồng SSE của `GET /mcp` trong session đang mở; client phải giữ `mcp-session-id`.
-- Nhiều host (như Claude Code) chỉ đọc lại resource khi nhận thông báo, **không** tự đánh thức model; muốn agent phản ứng ngay, hãy dùng client tự xử lý thông báo rồi gọi tool.
+- Resource `zalo://inbox` (`application/json`): reads as `{ messages, cursor, hasMore }`, the same shape as `zalo_get_messages` (the **newest** messages not yet cleared with `zalo_mark_read`, up to `limits.inboxWindow`, default 50, ordered oldest to newest; `cursor` is the cursor of the newest message). If more messages than this window arrive between two reads, the excess is missed, so raise `limits.inboxWindow`. `hasMore: true` means older messages exist outside the window — read them with `zalo_get_messages` (paginate forward with `since`).
+- The client calls `resources/subscribe` with `{ "uri": "zalo://inbox" }`. Whenever a new message enters the buffer, the server sends `notifications/resources/updated` with that `uri` (without message content).
+- On notification, the client re-reads `zalo://inbox` or calls `zalo_get_messages` with `since` set to the last processed cursor.
+- Notifications are **best-effort** per the MCP spec (they can be lost on disconnect or coalesced): always keep cursor-based polling as the source of truth.
+- Over HTTP, notifications travel through the SSE stream of `GET /mcp` in the open session; the client must keep the `mcp-session-id`.
+- Many hosts (such as Claude Code) only re-read the resource on notification and do **not** wake the model by themselves; for an agent to react immediately, use a client that handles notifications itself and then calls tools.
 
 ```js
 import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 
 client.setNotificationHandler(ResourceUpdatedNotificationSchema, async () => {
     const res = await client.callTool({ name: "zalo_get_messages", arguments: { since: lastCursor } });
-    // xử lý tin mới, cập nhật lastCursor
+    // handle new messages, update lastCursor
 });
 await client.subscribeResource({ uri: "zalo://inbox" });
 ```
 
 ---
 
-## Tham chiếu Tools
+## Tools reference
 
-`threadType`: `0` hoặc `"dm"` = DM (mặc định), `1` hoặc `"group"` = nhóm. Giá trị `threadType` của tin trong buffer (`dm`/`group`) có thể truyền thẳng vào các tool gửi/react/lịch sử.
+`threadType`: `0` or `"dm"` = DM (default), `1` or `"group"` = group. The `threadType` of buffered messages (`dm`/`group`) can be passed straight to the send/react/history tools.
 
 ### `zalo_get_messages`
-Lấy tin nhắn từ buffer, hỗ trợ cursor để đọc tăng dần.
+Get messages from the buffer; supports a cursor for incremental reads.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `threadId` | string (tuỳ chọn) | Chỉ đọc một thread. Bỏ trống để đọc tất cả thread đang theo dõi |
-| `since` | number (mặc định 0) | Cursor từ lần đọc trước — chỉ lấy tin mới hơn |
-| `limit` | number 1–100 (mặc định `limits.maxMessagesPerPoll`) | Số tin tối đa |
+| Name | Type | Description |
+|------|------|-------------|
+| `threadId` | string (optional) | Read a single thread only. Omit to read all watched threads |
+| `since` | number (default 0) | Cursor from the previous read — returns only newer messages |
+| `limit` | number 1–100 (default `limits.maxMessagesPerPoll`) | Max messages |
 
-Kết quả: `{ messages, cursor, hasMore }`. Mỗi tin có `id`, `cliMsgId`, `threadId`, `threadType` (`dm`/`group`), `senderId`, `senderName`, `text`, `timestamp`, `ts`, `type`, `attachment`, `replyTo` (`{ msgId, ownerId, text }` hoặc `null`), `threadName`.
+Result: `{ messages, cursor, hasMore }`. Each message has `id`, `cliMsgId`, `threadId`, `threadType` (`dm`/`group`), `senderId`, `senderName`, `text`, `timestamp`, `ts`, `type`, `attachment`, `replyTo` (`{ msgId, ownerId, text }` or `null`), `threadName`.
 
 ---
 
 ### `zalo_get_history`
-Lấy tin cũ từ server Zalo (tối đa ~2 tuần), khác với buffer của `zalo_get_messages`.
+Fetch older messages from the Zalo server (up to ~2 weeks), unlike the buffer used by `zalo_get_messages`.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `threadId` | string | Thread cần lấy |
-| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
-| `limit` | number 1–200 (mặc định 50) | Số tin tối đa |
-| `lastMsgId` | string (tuỳ chọn) | Cursor phân trang từ lần gọi trước |
+| Name | Type | Description |
+|------|------|-------------|
+| `threadId` | string | Thread to fetch |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (default), 1 / `"group"` = group |
+| `limit` | number 1–200 (default 50) | Max messages |
+| `lastMsgId` | string (optional) | Pagination cursor from the previous call |
 
-Kết quả: `{ threadId, threadType, count, messages, cursor, hasMore }`.
+Result: `{ threadId, threadType, count, messages, cursor, hasMore }`.
 
 ---
 
 ### `zalo_send_message`
-Gửi tin nhắn văn bản, có thể trả lời (quote) một tin hoặc mention người dùng.
+Send a text message; can reply to (quote) a message or mention users.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `threadId` | string | ID người dùng hoặc nhóm |
-| `text` | string | Nội dung tin nhắn |
-| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
-| `replyToMessageId` | string (tuỳ chọn) | `id` của tin trong buffer để quote |
-| `mentions` | array (tuỳ chọn) | `[{ userId, pos, len }]` — `pos`/`len` là vị trí và độ dài đoạn `@Tên` trong `text` |
+| Name | Type | Description |
+|------|------|-------------|
+| `threadId` | string | User or group ID |
+| `text` | string | Message text |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (default), 1 / `"group"` = group |
+| `replyToMessageId` | string (optional) | `id` of a buffered message to quote |
+| `mentions` | array (optional) | `[{ userId, pos, len }]` — `pos`/`len` are the offset and length of the `@Name` span inside `text` |
 
-Kết quả: `{ "success": true, "messageId": "...", "sentAt": 1700000000000 }` (`sentAt` = mốc epoch ms khi lệnh gửi hoàn tất). Nếu `replyToMessageId` không còn trong buffer, tool trả lỗi.
+Result: `{ "success": true, "messageId": "...", "sentAt": 1700000000000 }` (`sentAt` = epoch ms when the send completed). If `replyToMessageId` is no longer in the buffer, the tool returns an error.
 
 ---
 
 ### `zalo_send_attachment`
-Gửi một hoặc nhiều ảnh/file.
+Send one or more images/files.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `threadId` | string | ID người dùng hoặc nhóm |
-| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
-| `sources` | string[] (1–10) | Đường dẫn tuyệt đối trên máy chạy server, hoặc URL `http(s)` |
-| `caption` | string (tuỳ chọn) | Nội dung kèm theo |
+| Name | Type | Description |
+|------|------|-------------|
+| `threadId` | string | User or group ID |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (default), 1 / `"group"` = group |
+| `sources` | string[] (1–10) | Absolute paths on the machine running the server, or `http(s)` URLs |
+| `caption` | string (optional) | Accompanying text |
 
-Kết quả: `{ "success": true, "messageId": ..., "attachmentIds": [...], "sentAt": 1700000000000 }` (`sentAt` = mốc epoch ms khi lệnh gửi hoàn tất).
+Result: `{ "success": true, "messageId": ..., "attachmentIds": [...], "sentAt": 1700000000000 }` (`sentAt` = epoch ms when the send completed).
 
 ---
 
 ### `zalo_react`
-Thả reaction vào một tin nhắn.
+Add a reaction to a message.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `messageId` | string | `id` của tin cần react |
-| `threadId` | string | Thread chứa tin |
-| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
+| Name | Type | Description |
+|------|------|-------------|
+| `messageId` | string | `id` of the message to react to |
+| `threadId` | string | Thread containing the message |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (default), 1 / `"group"` = group |
 | `reaction` | enum | `heart`, `like`, `haha`, `wow`, `cry`, `angry` |
-| `cliMsgId` | string (tuỳ chọn) | Chỉ cần khi tin không còn trong buffer |
+| `cliMsgId` | string (optional) | Only needed when the message is no longer in the buffer |
 
-Kết quả: `{ "success": true }`.
+Result: `{ "success": true }`.
 
 ---
 
 ### `zalo_list_threads`
-Liệt kê các thread đang có tin trong buffer kèm số tin chưa đọc.
+List threads that currently have messages in the buffer, with unread counts.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `type` | enum | `dm`, `group` hoặc `all` (mặc định) |
+| Name | Type | Description |
+|------|------|-------------|
+| `type` | enum | `dm`, `group` or `all` (default) |
 
-Kết quả: `{ threads: [{ threadId, unread, total, lastActivity, threadType, name }], total }`.
+Result: `{ threads: [{ threadId, unread, total, lastActivity, threadType, name }], total }`.
 
 ---
 
 ### `zalo_search_threads`
-Tìm thread (nhóm/DM) theo tên, hỗ trợ fuzzy và không phân biệt dấu tiếng Việt.
+Search threads (groups/DMs) by name; fuzzy and Vietnamese-accent-insensitive.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `query` | string | Từ khoá |
-| `type` | enum | `dm`, `group` hoặc `all` (mặc định) |
-| `limit` | number 1–50 (mặc định 10) | Số kết quả tối đa |
+| Name | Type | Description |
+|------|------|-------------|
+| `query` | string | Search keyword |
+| `type` | enum | `dm`, `group` or `all` (default) |
+| `limit` | number 1–50 (default 10) | Max results |
 
-Kết quả: `{ results, total }`.
+Result: `{ results, total }`.
 
 ---
 
 ### `zalo_list_conversations`
-Liệt kê hội thoại của chính tài khoản Zalo (không chỉ thread trong buffer): DM gần đây nhất theo lần tương tác cuối, và các nhóm.
+List the Zalo account's own conversations (not just buffered threads): recent DMs ordered by last interaction, and groups.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `type` | enum | `dm`, `group` hoặc `all` (mặc định) |
-| `limit` | number 1–200 (mặc định 50) | Số kết quả tối đa cho mỗi loại |
+| Name | Type | Description |
+|------|------|-------------|
+| `type` | enum | `dm`, `group` or `all` (default) |
+| `limit` | number 1–200 (default 50) | Max results per type |
 
-Kết quả: `{ conversations: [{ threadId, name, threadType, lastActionTime | memberCount }], total }`.
+Result: `{ conversations: [{ threadId, name, threadType, lastActionTime | memberCount }], total }`.
 
 ---
 
 ### `zalo_get_group_members`
-Liệt kê thành viên của nhóm.
+List the members of a group.
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `groupId` | string | ID nhóm |
-| `limit` | number 1–500 (mặc định 200) | Số thành viên tối đa |
+| Name | Type | Description |
+|------|------|-------------|
+| `groupId` | string | Group ID |
+| `limit` | number 1–500 (default 200) | Max members |
 
-Kết quả: `{ groupId, name, total, members: [{ userId, name, isAdmin, isCreator }] }`.
+Result: `{ groupId, name, total, members: [{ userId, name, isAdmin, isCreator }] }`.
 
 ---
 
 ### `zalo_get_user_info`
-Tra cứu hồ sơ công khai của người dùng (không trả về số điện thoại).
+Look up a user's public profile (does not return phone numbers).
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `userId` | string | ID người dùng, ví dụ `senderId` của một tin nhắn |
+| Name | Type | Description |
+|------|------|-------------|
+| `userId` | string | User ID, e.g. a message's `senderId` |
 
-Kết quả: `{ userId, displayName, zaloName, avatar }`.
+Result: `{ userId, displayName, zaloName, avatar }`.
 
 ---
 
 ### `zalo_mark_read`
-Đánh dấu đã đọc — xoá tin khỏi buffer đến cursor chỉ định (áp dụng cho mọi thread).
+Mark as read — removes messages from the buffer up to the given cursor (applies to all threads).
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `cursor` | number | Cursor trả về từ `zalo_get_messages` |
+| Name | Type | Description |
+|------|------|-------------|
+| `cursor` | number | Cursor returned by `zalo_get_messages` |
 
-Kết quả: `{ success, discarded }`.
+Result: `{ success, discarded }`.
 
 ---
 
 ### `zalo_view_media`
-Mở ảnh/audio/video của một tin nhắn bằng trình xem của hệ thống (tự tải nếu chưa có).
+Open a message's image/audio/video in the system viewer (downloads it first if needed).
 
-| Tên | Kiểu | Mô tả |
-|-----|------|--------|
-| `messageId` | string | `id` của tin có media |
-| `threadId` | string (tuỳ chọn) | Thread cần tìm; bỏ trống để tìm tất cả |
-| `open` | boolean | Có mở bằng trình xem hay không (mặc định `media.autoOpen`) |
+| Name | Type | Description |
+|------|------|-------------|
+| `messageId` | string | `id` of the message with media |
+| `threadId` | string (optional) | Thread to search; omit to search all |
+| `open` | boolean | Whether to open in the viewer (default `media.autoOpen`) |
 
-Kết quả: `{ success, path, mediaType }`.
+Result: `{ success, path, mediaType }`.
 
 ---
 
-## Cấu hình (mcp-config.json)
+## Configuration (mcp-config.json)
 
-File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo được gộp lên giá trị mặc định dưới đây:
+The file lives at `~/.zalo-agent-cli/mcp-config.json`; values you set are merged over the defaults below:
 
 ```json
 {
@@ -329,49 +329,49 @@ File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo �
 }
 ```
 
-| Trường | Mô tả |
-|--------|--------|
-| `watchThreads` | Pattern thread cần theo dõi: `dm:*`, `group:*`, `dm:<id>`, `group:<id>` |
-| `mode`, `limits.autoDigestThreshold` | Dành riêng cho tính năng sau, hiện chưa có tác dụng |
-| `triggerKeywords` | Từ khoá đánh dấu tin cần agent chú ý |
-| `notify.enabled` | Bật gửi thông báo vào nhóm Zalo, chỉ gửi khi không có client nào đang subscribe `zalo://inbox` |
-| `notify.thread` | ID nhóm nhận thông báo |
-| `notify.on` | Loại thread kích hoạt thông báo (`dm`, `group`) |
-| `notify.cooldown` | Gộp thông báo trong khoảng này (`30s`, `5m`, `1h`) |
-| `limits.maxMessagesPerPoll` | Số tin mặc định mỗi lần `zalo_get_messages` |
-| `limits.inboxWindow` | Số tin mới nhất mà resource `zalo://inbox` trả về mỗi lần đọc (mặc định 50) |
-| `limits.bufferMaxAge` | Tuổi tối đa của tin trong buffer (`2h`) |
-| `limits.bufferMaxSize` | Số tin tối đa mỗi thread trong buffer |
-| `limits.sessionIdleTimeout` | Thời gian session HTTP không có request nào đang mở thì bị đóng (`30m`, mặc định) |
-| `media.downloadDir` | Thư mục lưu media (mặc định `~/.zalo-agent-cli/media/`) |
-| `media.autoOpen` | Mặc định mở media sau khi tải |
+| Field | Description |
+|-------|-------------|
+| `watchThreads` | Thread patterns to watch: `dm:*`, `group:*`, `dm:<id>`, `group:<id>` |
+| `mode`, `limits.autoDigestThreshold` | Reserved for a future feature; currently has no effect |
+| `triggerKeywords` | Keywords that flag a message for the agent's attention |
+| `notify.enabled` | Enable notifications to a Zalo group; only sent when no client is subscribed to `zalo://inbox` |
+| `notify.thread` | ID of the group that receives notifications |
+| `notify.on` | Thread types that trigger notifications (`dm`, `group`) |
+| `notify.cooldown` | Notifications are batched within this interval (`30s`, `5m`, `1h`) |
+| `limits.maxMessagesPerPoll` | Default number of messages per `zalo_get_messages` call |
+| `limits.inboxWindow` | Number of newest messages the `zalo://inbox` resource returns per read (default 50) |
+| `limits.bufferMaxAge` | Max age of buffered messages (`2h`) |
+| `limits.bufferMaxSize` | Max messages per thread in the buffer |
+| `limits.sessionIdleTimeout` | An HTTP session with no open request for this long is closed (`30m`, default) |
+| `media.downloadDir` | Directory for downloaded media (default `~/.zalo-agent-cli/media/`) |
+| `media.autoOpen` | Open media by default after download |
 
 ---
 
-## Kiến trúc
+## Architecture
 
 ```
 Zalo WebSocket
      ↓
-Thread Filter (watchThreads / lọc noise)
+Thread Filter (watchThreads / noise filtering)
      ↓
-Ring Buffer (in-memory, tối đa bufferMaxSize mỗi thread)
+Ring Buffer (in-memory, up to bufferMaxSize per thread)
      ↓
-MCP Server (stdio hoặc HTTP /mcp)
+MCP Server (stdio or HTTP /mcp)
      ↓
-Claude Code / agent của bạn
+Claude Code / your agent
 ```
 
-- **Auto-reconnect**: WebSocket tự kết nối lại; khi phiên bị đóng, server đăng nhập lại và mọi tool dùng phiên mới
-- **Cursor-based**: Client đọc tăng dần, không bỏ sót tin
-- **Session HTTP**: mỗi client có một session (`mcp-session-id`); tin nhắn vẫn nằm trong buffer chung nên session mất đi (kể cả bị đóng do idle) không làm mất tin
+- **Auto-reconnect**: the WebSocket reconnects by itself; when the session is closed, the server logs in again and all tools use the new session
+- **Cursor-based**: clients read incrementally and don't miss messages
+- **HTTP sessions**: each client has its own session (`mcp-session-id`); messages stay in the shared buffer, so losing a session (including idle close) loses no messages
 
 ---
 
-## Mẹo sử dụng
+## Usage tips
 
-- Dùng `watchThreads` để lọc noise — chỉ nhận thread quan trọng
-- Gọi `zalo_get_messages` định kỳ với `since` để polling tăng dần (nguồn sự thật); có thể subscribe `zalo://inbox` để được báo khi có tin mới
-- Dùng `zalo_mark_read` sau khi xử lý xong để buffer không đầy
-- Dùng `zalo_list_conversations` / `zalo_search_threads` để tìm `threadId` trước khi gửi tin
-- Trên VPS: luôn dùng `--auth` và đặt HTTPS phía trước
+- Use `watchThreads` to filter noise — receive only the threads that matter
+- Poll `zalo_get_messages` periodically with `since` for incremental reads (source of truth); optionally subscribe to `zalo://inbox` to be notified of new messages
+- Call `zalo_mark_read` after processing so the buffer doesn't fill up
+- Use `zalo_list_conversations` / `zalo_search_threads` to find the `threadId` before sending
+- On a VPS: always use `--auth` and put HTTPS in front
