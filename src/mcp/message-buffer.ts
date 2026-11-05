@@ -71,11 +71,14 @@ export class MessageBuffer {
      * @param [threadId] - If omitted, reads from all threads
      * @param [since=0] - Cursor to read from (exclusive)
      * @param [maxCount=20] - Max messages to return
+     * @param [options.newest] - Return the latest `maxCount` messages instead of the oldest, still ordered
+     *   oldest→newest. `hasMore` then means older messages were left out.
      */
     read(
         threadId?: string,
         since = 0,
         maxCount = 20,
+        { newest = false }: { newest?: boolean } = {},
     ): { messages: BufferedMessage[]; cursor: number; hasMore: boolean } {
         const sources = threadId
             ? [this._threads.get(threadId)].filter((t) => t !== undefined)
@@ -91,7 +94,7 @@ export class MessageBuffer {
         all.sort((a, b) => a._cursor - b._cursor);
 
         const hasMore = all.length > maxCount;
-        const messages = all.slice(0, maxCount);
+        const messages = newest ? all.slice(Math.max(0, all.length - maxCount)) : all.slice(0, maxCount);
         const cursor = messages.length > 0 ? messages[messages.length - 1]._cursor : since;
 
         return { messages, cursor, hasMore };

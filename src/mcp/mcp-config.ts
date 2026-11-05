@@ -21,6 +21,8 @@ export interface MCPConfig {
     };
     limits: {
         maxMessagesPerPoll: number;
+        /** Size of the zalo://inbox window (newest N unread messages) */
+        inboxWindow: number;
         autoDigestThreshold: number;
         bufferMaxAge: string | number;
         bufferMaxSize: number;
@@ -52,6 +54,7 @@ export function getDefaultConfig(): MCPConfig {
         },
         limits: {
             maxMessagesPerPoll: 20,
+            inboxWindow: 50,
             autoDigestThreshold: 50,
             bufferMaxAge: "2h",
             bufferMaxSize: 500,

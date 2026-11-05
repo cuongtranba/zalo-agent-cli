@@ -29,6 +29,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- `zalo://inbox` now returns the newest `limits.inboxWindow` unread messages (oldest→newest, `hasMore` = older ones left out) instead of the oldest, so a subscriber that re-reads on each notification keeps seeing new messages when more than the window are buffered. The window is its own setting, `limits.inboxWindow` (default 50), separate from `limits.maxMessagesPerPoll`, which now only governs `zalo_get_messages`; `zalo_get_messages` paging is unchanged.
 - `oa login` crashed with a `ReferenceError` when the login timed out, because `warning()` was used without being imported.
 - `profile full-avatar` always printed `?`: it read `avatar` from the response, but the field is `full_avatar`.
 - `msg history` could not stop the listener when a fetch failed: the error handler referenced a variable scoped to the `try` block, and the resulting error was swallowed.

@@ -51,7 +51,7 @@ export function registerInboxResource(
     nameCache?: ThreadNameCache,
     inboxSubscribers: InboxSubscribers = new InboxSubscribers(),
 ): void {
-    const maxPerPoll = config.limits?.maxMessagesPerPoll ?? 20;
+    const inboxWindow = config.limits?.inboxWindow ?? 50;
 
     server.registerResource(
         "inbox",
@@ -59,8 +59,10 @@ export function registerInboxResource(
         {
             title: "Zalo Inbox",
             description:
-                "Buffered Zalo messages that have not been marked read, as JSON { messages, cursor, hasMore } " +
-                "(same shape as zalo_get_messages). Subscribe to be notified (notifications/resources/updated) " +
+                "The newest N buffered Zalo messages that have not been marked read (N = limits.inboxWindow, default 50), " +
+                "oldest to newest, as JSON { messages, cursor, hasMore } (same shape as zalo_get_messages). " +
+                "cursor is the newest returned message's cursor; hasMore is true when older unread messages " +
+                "were left out of the window (page them with zalo_get_messages). Subscribe to be notified (notifications/resources/updated) " +
                 "when new messages arrive, then re-read this resource or call zalo_get_messages with your last " +
                 "cursor. Notifications are best-effort: keep cursor polling as the source of truth.",
             mimeType: "application/json",
@@ -70,7 +72,7 @@ export function registerInboxResource(
                 {
                     uri: uri.href,
                     mimeType: "application/json",
-                    text: JSON.stringify(readBufferedMessages(buffer, nameCache, { limit: maxPerPoll })),
+                    text: JSON.stringify(readBufferedMessages(buffer, nameCache, { limit: inboxWindow, newest: true })),
                 },
             ],
         }),

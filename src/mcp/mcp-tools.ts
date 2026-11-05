@@ -93,13 +93,19 @@ interface HistoryMessage {
 /**
  * Read buffered messages and enrich them with thread names.
  * Shared by the zalo_get_messages tool and the zalo://inbox resource so both return the same shape.
+ * `newest` returns the latest `limit` messages (oldest→newest) instead of paging forward from `since`.
  */
 export function readBufferedMessages(
     buffer: MessageBuffer,
     nameCache: ThreadNameCache | undefined,
-    { threadId, since = 0, limit }: { threadId?: string; since?: number; limit: number },
+    {
+        threadId,
+        since = 0,
+        limit,
+        newest = false,
+    }: { threadId?: string; since?: number; limit: number; newest?: boolean },
 ): { messages: BufferedMessage[]; cursor: number; hasMore: boolean } {
-    const result = buffer.read(threadId, since, limit);
+    const result = buffer.read(threadId, since, limit, { newest });
     if (nameCache) {
         for (const msg of result.messages) {
             const info = nameCache.get(msg.threadId);
