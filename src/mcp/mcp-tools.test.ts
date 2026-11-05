@@ -90,6 +90,24 @@ test("zalo_send_message with replyToMessageId quotes the buffered message", asyn
     assert.equal(type, 1);
 });
 
+test('zalo_send_message accepts threadType "group" and reports messageId and sentAt', async () => {
+    const { api, calls } = makeFakeApi();
+    const client = await connect(() => api);
+    const before = Date.now();
+
+    const result = await client.callTool({
+        name: "zalo_send_message",
+        arguments: { threadId: "g1", threadType: "group", text: "hi" },
+    });
+
+    assert.equal(result.isError, undefined);
+    assert.deepEqual(calls[0].args, ["hi", "g1", ThreadType.Group]);
+    const payload = JSON.parse((result.content as Array<{ text: string }>)[0].text);
+    assert.equal(payload.messageId, 555);
+    assert.equal(typeof payload.sentAt, "number");
+    assert.ok(payload.sentAt >= before);
+});
+
 test("zalo_react sends the buffered cliMsgId", async () => {
     const { api, calls } = makeFakeApi();
     const buffer = new MessageBuffer();

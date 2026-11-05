@@ -41,6 +41,22 @@ export type ToolsApi = Pick<
 
 /** Thread type constants matching zca-js ThreadType enum */
 const THREAD_USER = 0;
+const THREAD_GROUP = 1;
+
+/**
+ * threadType accepted by every tool that targets a thread: the numeric zca-js value or the
+ * "dm"/"group" name that buffered messages carry. A plain union (no transform) keeps the
+ * generated JSON input schema a simple anyOf of consts; handlers normalize with toThreadType.
+ */
+const THREAD_TYPE_SCHEMA = z
+    .union([z.literal(0), z.literal(1), z.literal("dm"), z.literal("group")])
+    .default(THREAD_USER)
+    .describe('Thread type: 0 or "dm" = DM, 1 or "group" = group');
+
+/** Normalize an accepted threadType value to the zca-js numeric ThreadType. */
+function toThreadType(value: z.infer<typeof THREAD_TYPE_SCHEMA>): 0 | 1 {
+    return value === 1 || value === "group" ? THREAD_GROUP : THREAD_USER;
+}
 
 /** Reaction names exposed to agents, mapped to zca-js Reactions codes */
 const REACTION_CODES = {
@@ -162,18 +178,12 @@ export function registerTools(
         {
             title: "Send Zalo Message",
             description:
-                "Send a text message to a Zalo thread (DM or group). threadType: 0=DM(User), 1=Group. " +
+                'Send a text message to a Zalo thread (DM or group). threadType: 0 or "dm" = DM, 1 or "group" = group. ' +
                 "Optionally reply to a buffered message (replyToMessageId) or @mention users in a group.",
             inputSchema: z.object({
                 threadId: z.string().describe("Thread ID to send message to"),
                 text: z.string().min(1).describe("Message text to send"),
-                threadType: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .max(1)
-                    .default(THREAD_USER)
-                    .describe("Thread type: 0=DM(User), 1=Group"),
+                threadType: THREAD_TYPE_SCHEMA,
                 replyToMessageId: z
                     .string()
                     .optional()
@@ -209,9 +219,10 @@ export function registerTools(
                         rich.mentions = mentions.map((m) => ({ pos: m.pos, uid: m.userId, len: m.len }));
                     }
                 }
-                const result = await getApi().sendMessage(content, threadId, Number(threadType));
+                const result = await getApi().sendMessage(content, threadId, toThreadType(threadType));
+                const sentAt = Date.now();
                 const messageId = result?.message?.msgId ?? null;
-                return ok({ success: true, messageId });
+                return ok({ success: true, messageId, sentAt });
             } catch (e) {
                 console.error("[mcp-tools] zalo_send_message error:", errorMessage(e));
                 return err(errorMessage(e));
@@ -226,16 +237,10 @@ export function registerTools(
             title: "Send Zalo Attachment",
             description:
                 "Send one or more files/images to a Zalo thread. Each source is an absolute file path on the " +
-                "server host or an http(s) URL (downloaded first, max 25 MB). threadType: 0=DM(User), 1=Group.",
+                'server host or an http(s) URL (downloaded first, max 25 MB). threadType: 0 or "dm" = DM, 1 or "group" = group.',
             inputSchema: z.object({
                 threadId: z.string().describe("Thread ID to send to"),
-                threadType: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .max(1)
-                    .default(THREAD_USER)
-                    .describe("Thread type: 0=DM(User), 1=Group"),
+                threadType: THREAD_TYPE_SCHEMA,
                 sources: z
                     .array(z.string().min(1))
                     .min(1)
@@ -252,11 +257,12 @@ export function registerTools(
                 const result = await getApi().sendMessage(
                     { msg: caption, attachments: paths },
                     threadId,
-                    Number(threadType),
+                    toThreadType(threadType),
                 );
+                const sentAt = Date.now();
                 const messageId = result?.message?.msgId ?? null;
                 const attachmentIds = (result?.attachment ?? []).map((a) => a.msgId);
-                return ok({ success: true, messageId, attachmentIds });
+                return ok({ success: true, messageId, attachmentIds, sentAt });
             } catch (e) {
                 console.error("[mcp-tools] zalo_send_attachment error:", errorMessage(e));
                 return err(errorMessage(e));
@@ -273,17 +279,12 @@ export function registerTools(
             title: "React to Zalo Message",
             description:
                 "Add a reaction to a message. Works best for messages received while the server is running " +
-                "(their cliMsgId is known); otherwise pass cliMsgId explicitly.",
+                "(their cliMsgId is known); otherwise pass cliMsgId explicitly. " +
+                'threadType: 0 or "dm" = DM, 1 or "group" = group.',
             inputSchema: z.object({
                 messageId: z.string().describe("Message ID to react to"),
                 threadId: z.string().describe("Thread ID the message belongs to"),
-                threadType: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .max(1)
-                    .default(THREAD_USER)
-                    .describe("Thread type: 0=DM(User), 1=Group"),
+                threadType: THREAD_TYPE_SCHEMA,
                 reaction: z
                     .enum(Object.keys(REACTION_CODES) as [keyof typeof REACTION_CODES])
                     .describe("Reaction: heart, like, haha, wow, cry, angry"),
@@ -300,7 +301,7 @@ export function registerTools(
                 await getApi().addReaction(REACTION_CODES[reaction], {
                     data: { msgId: messageId, cliMsgId: resolvedCliMsgId },
                     threadId,
-                    type: Number(threadType),
+                    type: toThreadType(threadType),
                 });
                 return ok({ success: true });
             } catch (e) {
@@ -544,16 +545,11 @@ export function registerTools(
                 "Fetch historical messages from a Zalo DM or group conversation (up to ~2 weeks). " +
                 "Unlike zalo_get_messages (which reads from the live buffer), this fetches older messages " +
                 "from the Zalo server. Use 'lastMsgId' cursor from previous response for pagination. " +
-                "WARNING: Large limits may consume significant memory/bandwidth. Start with a small limit and paginate.",
+                "WARNING: Large limits may consume significant memory/bandwidth. Start with a small limit and paginate. " +
+                'threadType: 0 or "dm" = DM, 1 or "group" = group.',
             inputSchema: z.object({
                 threadId: z.string().describe("Thread ID to fetch history from"),
-                threadType: z
-                    .number()
-                    .int()
-                    .min(0)
-                    .max(1)
-                    .default(THREAD_USER)
-                    .describe("Thread type: 0=DM(User), 1=Group"),
+                threadType: THREAD_TYPE_SCHEMA,
                 limit: z.number().int().min(1).max(200).default(50).describe("Max messages to fetch"),
                 lastMsgId: z
                     .string()
@@ -586,7 +582,7 @@ export function registerTools(
                         }, 10000);
 
                         listener.on("old_messages", handler);
-                        listener.requestOldMessages(threadType, cursor);
+                        listener.requestOldMessages(toThreadType(threadType), cursor);
                     });
 
                     if (!pageMessages || pageMessages.length === 0) {
@@ -633,7 +629,7 @@ export function registerTools(
 
                 return ok({
                     threadId,
-                    threadType: threadType === 0 ? "dm" : "group",
+                    threadType: toThreadType(threadType) === THREAD_USER ? "dm" : "group",
                     count: allMessages.length,
                     messages: allMessages,
                     cursor: cursor,

@@ -143,7 +143,7 @@ await client.subscribeResource({ uri: "zalo://inbox" });
 
 ## Tham chiếu Tools
 
-`threadType`: `0` = DM (mặc định), `1` = nhóm.
+`threadType`: `0` hoặc `"dm"` = DM (mặc định), `1` hoặc `"group"` = nhóm. Giá trị `threadType` của tin trong buffer (`dm`/`group`) có thể truyền thẳng vào các tool gửi/react/lịch sử.
 
 ### `zalo_get_messages`
 Lấy tin nhắn từ buffer, hỗ trợ cursor để đọc tăng dần.
@@ -164,7 +164,7 @@ Lấy tin cũ từ server Zalo (tối đa ~2 tuần), khác với buffer của `
 | Tên | Kiểu | Mô tả |
 |-----|------|--------|
 | `threadId` | string | Thread cần lấy |
-| `threadType` | number | 0 = DM (mặc định), 1 = nhóm |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
 | `limit` | number 1–200 (mặc định 50) | Số tin tối đa |
 | `lastMsgId` | string (tuỳ chọn) | Cursor phân trang từ lần gọi trước |
 
@@ -179,11 +179,11 @@ Gửi tin nhắn văn bản, có thể trả lời (quote) một tin hoặc ment
 |-----|------|--------|
 | `threadId` | string | ID người dùng hoặc nhóm |
 | `text` | string | Nội dung tin nhắn |
-| `threadType` | number | 0 = DM (mặc định), 1 = nhóm |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
 | `replyToMessageId` | string (tuỳ chọn) | `id` của tin trong buffer để quote |
 | `mentions` | array (tuỳ chọn) | `[{ userId, pos, len }]` — `pos`/`len` là vị trí và độ dài đoạn `@Tên` trong `text` |
 
-Kết quả: `{ "success": true, "messageId": "..." }`. Nếu `replyToMessageId` không còn trong buffer, tool trả lỗi.
+Kết quả: `{ "success": true, "messageId": "...", "sentAt": 1700000000000 }` (`sentAt` = mốc epoch ms khi lệnh gửi hoàn tất). Nếu `replyToMessageId` không còn trong buffer, tool trả lỗi.
 
 ---
 
@@ -193,11 +193,11 @@ Gửi một hoặc nhiều ảnh/file.
 | Tên | Kiểu | Mô tả |
 |-----|------|--------|
 | `threadId` | string | ID người dùng hoặc nhóm |
-| `threadType` | number | 0 = DM (mặc định), 1 = nhóm |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
 | `sources` | string[] (1–10) | Đường dẫn tuyệt đối trên máy chạy server, hoặc URL `http(s)` |
 | `caption` | string (tuỳ chọn) | Nội dung kèm theo |
 
-Kết quả: `{ "success": true, "messageId": ..., "attachmentIds": [...] }`.
+Kết quả: `{ "success": true, "messageId": ..., "attachmentIds": [...], "sentAt": 1700000000000 }` (`sentAt` = mốc epoch ms khi lệnh gửi hoàn tất).
 
 ---
 
@@ -208,7 +208,7 @@ Thả reaction vào một tin nhắn.
 |-----|------|--------|
 | `messageId` | string | `id` của tin cần react |
 | `threadId` | string | Thread chứa tin |
-| `threadType` | number | 0 = DM (mặc định), 1 = nhóm |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (mặc định), 1 / `"group"` = nhóm |
 | `reaction` | enum | `heart`, `like`, `haha`, `wow`, `cry`, `angry` |
 | `cliMsgId` | string (tuỳ chọn) | Chỉ cần khi tin không còn trong buffer |
 
