@@ -62,6 +62,16 @@ zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # mở ra mạng
 - Server chạy stateless: mỗi `POST /mcp` tạo một MCP server riêng, nhưng luôn dùng phiên Zalo hiện tại (kể cả sau khi tự đăng nhập lại).
 - Nên đặt reverse proxy HTTPS (nginx, Caddy) phía trước khi mở ra Internet.
 
+### Chạy nền bằng pm2
+
+```bash
+pm2 start zalo-agent --name zalo-mcp --stop-exit-codes 78 -- mcp start --http 3847 --auth <token>
+```
+
+- Mã thoát `78` nghĩa là session Zalo đã hết hạn hoặc không có: server in một dòng lỗi rồi dừng hẳn thay vì khởi động lại liên tục.
+- Cách xử lý: chạy `zalo-agent login`, sau đó `pm2 restart zalo-mcp`.
+- Lỗi mạng tạm thời vẫn thoát với mã `1` để pm2 tự thử lại.
+
 ### Ví dụ client JavaScript
 
 ```js

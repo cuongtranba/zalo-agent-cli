@@ -177,21 +177,47 @@ export function extractCredentials() {
 }
 
 /**
+ * Log in the active account from its saved credentials, replacing any current session.
+ * Unlike autoLogin, failures are thrown so callers can decide whether to retry or give up.
+ * Callers that need a fresh session call clearSession() first.
+ * @returns {Promise<object>} - the active account registry entry
+ * @throws {Error} code "LOGIN_REQUIRED" when no account or saved credentials exist; login errors propagate
+ */
+export async function loginActiveAccount() {
+    const active = getActive();
+    const creds = active ? loadCredentials(active.ownId) : null;
+    if (!creds) {
+        const error = new Error("no saved Zalo session");
+        error.code = "LOGIN_REQUIRED";
+        throw error;
+    }
+
+    await loginWithCredentials(creds, active.proxy || null);
+    return active;
+}
+
+/**
+ * Whether a login error means the saved session is no longer usable (missing or rejected by Zalo),
+ * as opposed to a transient network failure that is worth retrying.
+ * zca-js reports HTTP-transport failures as ZcaApiError messages starting with "Failed to fetch".
+ * @param {Error} error
+ * @returns {boolean}
+ */
+export function isSessionRejected(error) {
+    if (error?.code === "LOGIN_REQUIRED") return true;
+    return error?.name === "ZcaApiError" && !String(error.message).startsWith("Failed to fetch");
+}
+
+/**
  * Auto-login using active account from registry.
- * Called before commands that need authentication.
+ * Called before commands that need authentication. Never throws.
  * @param {boolean} jsonMode - suppress output in JSON mode
  */
 export async function autoLogin(jsonMode = false) {
     if (_api) return; // Already logged in
 
-    const active = getActive();
-    if (!active) return;
-
-    const creds = loadCredentials(active.ownId);
-    if (!creds) return;
-
     try {
-        await loginWithCredentials(creds, active.proxy || null);
+        const active = await loginActiveAccount();
         if (!jsonMode) {
             info(`Auto-login: ${active.name || active.ownId}`);
         }

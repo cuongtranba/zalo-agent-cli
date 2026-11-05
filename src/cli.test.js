@@ -5,8 +5,10 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "child_process";
-import { resolve } from "path";
+import { execFileSync, spawnSync } from "child_process";
+import fs from "fs";
+import os from "os";
+import { resolve, join } from "path";
 
 const CLI = resolve(import.meta.dirname, "index.js");
 
@@ -94,5 +96,22 @@ describe("CLI interface", () => {
     it("account list on clean state shows no accounts", () => {
         const out = run("account", "list");
         assert.match(out, /No accounts/);
+    });
+
+    it("mcp start exits 78 and asks to log in when there is no Zalo session (regression: pm2 crash loop)", () => {
+        const home = fs.mkdtempSync(join(os.tmpdir(), "zalo-agent-cli-mcp-"));
+        try {
+            const result = spawnSync("node", [CLI, "mcp", "start"], {
+                encoding: "utf-8",
+                timeout: 15000,
+                stdin: "ignore",
+                env: { ...process.env, HOME: home },
+            });
+            assert.equal(result.status, 78);
+            assert.match(result.stderr, /zalo-agent login/);
+            assert.equal(result.stdout, "");
+        } finally {
+            fs.rmSync(home, { recursive: true, force: true });
+        }
     });
 });
