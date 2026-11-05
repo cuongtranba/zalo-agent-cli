@@ -38,6 +38,7 @@ function verifyMac(body: string, mac: string, secretKey: string): boolean {
 }
 
 export function registerOAListenCommand(oaCommand: Command, program: Command): void {
+    const json = () => program.opts().json;
     oaCommand
         .command("listen")
         .description("Start webhook listener for OA events (follow, messages, clicks, etc.)")
@@ -56,7 +57,6 @@ export function registerOAListenCommand(oaCommand: Command, program: Command): v
                 path: string;
                 verifyDomain?: string;
             }) => {
-                const json = () => program.opts().json;
                 const port = Number(opts.port);
                 const eventFilter = opts.events === "all" ? null : opts.events.split(",").map((e) => e.trim());
 

@@ -37,7 +37,7 @@ export function registerConvCommands(program: Command): void {
                     const list = Array.isArray(friends) ? friends : [];
                     const sorted = list
                         .filter((f) => f.lastActionTime > 0)
-                        .sort((a, b) => b.lastActionTime - a.lastActionTime)
+                        .toSorted((a, b) => b.lastActionTime - a.lastActionTime)
                         .slice(0, limit);
                     for (const f of sorted) {
                         conversations.push({

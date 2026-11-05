@@ -86,8 +86,8 @@ async function downloadUrl(source: string, dir: string, index: number): Promise<
     // Count bytes while streaming so a response without content-length cannot exhaust memory
     const chunks: Uint8Array[] = [];
     let size = 0;
-    // res.body is non-null for a successful response
-    for await (const chunk of res.body!) {
+    if (!res.body) throw new Error(`Empty response body: ${source}`);
+    for await (const chunk of res.body) {
         size += chunk.length;
         if (size > MAX_ATTACHMENT_BYTES) throw new Error(`Attachment too large (>25 MB): ${source}`);
         chunks.push(chunk);

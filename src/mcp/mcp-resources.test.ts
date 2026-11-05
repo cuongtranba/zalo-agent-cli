@@ -22,15 +22,14 @@ async function connect(buffer: MessageBuffer, inboxSubscribers?: InboxSubscriber
     });
     const client = new Client({ name: "test-client", version: "0.0.0" });
     const updates: string[] = [];
-    let notify: (uri: string) => void = () => {};
-    const nextUpdate = new Promise<string>((resolve) => (notify = resolve));
+    const nextUpdate = Promise.withResolvers<string>();
     client.setNotificationHandler(ResourceUpdatedNotificationSchema, (n) => {
         updates.push(n.params.uri);
-        notify(n.params.uri);
+        nextUpdate.resolve(n.params.uri);
     });
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(serverSide), client.connect(clientSide)]);
-    return { client, nextUpdate, updates };
+    return { client, nextUpdate: nextUpdate.promise, updates };
 }
 
 test("a subscribed client is notified when a message is buffered", { timeout: 5000 }, async () => {
@@ -76,18 +75,17 @@ test("an unsubscribed client receives no inbox updates", { timeout: 5000 }, asyn
 /** A notifier sharing `inboxSubscribers`, whose Zalo-group sends resolve `firstSend` */
 function makeNotifier(inboxSubscribers: InboxSubscribers) {
     const sent: string[] = [];
-    let notifySent: () => void = () => {};
-    const firstSend = new Promise<void>((resolve) => (notifySent = resolve));
+    const firstSend = Promise.withResolvers<void>();
     const api = {
         sendMessage: async (message: string | MessageContent) => {
             sent.push(String(message));
-            notifySent();
+            firstSend.resolve();
             const response: SendMessageResponse = { message: null, attachment: [] };
             return response;
         },
     };
     const config = { notify: { enabled: true, thread: "notify_group", on: ["dm"], cooldown: "20ms" } };
-    return { notifier: new ZaloNotifier(() => api, config, { inboxSubscribers }), sent, firstSend };
+    return { notifier: new ZaloNotifier(() => api, config, { inboxSubscribers }), sent, firstSend: firstSend.promise };
 }
 
 test(

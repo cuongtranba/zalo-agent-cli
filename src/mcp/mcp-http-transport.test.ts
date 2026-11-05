@@ -62,7 +62,7 @@ test("HTTP MCP rejects requests without the bearer token and serves all tools wi
             }),
         );
         const { tools } = await client.listTools();
-        assert.deepEqual(tools.map((t) => t.name).sort(), [...TOOL_NAMES].sort());
+        assert.deepEqual(tools.map((t) => t.name).toSorted(), TOOL_NAMES.toSorted());
         await client.close();
     } finally {
         server.close();
@@ -93,6 +93,7 @@ test(
 
             // The client opens its GET stream asynchronously after initialize and notifications sent before it
             // is open are dropped, so keep pushing across request round-trips until one gets through.
+            // oxlint-disable-next-line eslint/no-unmodified-loop-condition -- updatedUri is assigned by the notification handler
             while (!updatedUri) {
                 deps.buffer.push(
                     "g1",

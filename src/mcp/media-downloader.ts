@@ -142,16 +142,17 @@ export function openFile(filePath: string): void {
  * @param [options.threadName] - Thread display name from cache
  */
 export function autoDownloadMedia(message: NormalizedMessage, options: DownloadOptions = {}): void {
-    if (!message.attachment?.url) return;
-    downloadMedia(message, { ...options, autoOpen: false }).then(
-        (result) => {
-            message.attachment!.localPath = result.path;
+    const attachment = message.attachment;
+    if (!attachment?.url) return;
+    void (async () => {
+        try {
+            const result = await downloadMedia(message, { ...options, autoOpen: false });
+            attachment.localPath = result.path;
             console.error(`[media-dl] Saved: ${result.path}`);
-        },
-        (err) => {
+        } catch (err) {
             console.error(`[media-dl] Auto-download failed: ${errorMessage(err)}`);
-        },
-    );
+        }
+    })();
 }
 
 /**

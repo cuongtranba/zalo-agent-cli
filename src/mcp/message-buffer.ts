@@ -47,10 +47,11 @@ export class MessageBuffer {
      * @param message - Normalized message object
      */
     push(threadId: string, message: NormalizedMessage): void {
-        if (!this._threads.has(threadId)) {
-            this._threads.set(threadId, { messages: [], lastActivity: Date.now() });
+        let thread = this._threads.get(threadId);
+        if (!thread) {
+            thread = { messages: [], lastActivity: Date.now() };
+            this._threads.set(threadId, thread);
         }
-        const thread = this._threads.get(threadId)!;
         // Assign global cursor for incremental reads
         const buffered = Object.assign(message, { _cursor: ++this._globalCursor });
         thread.messages.push(buffered);

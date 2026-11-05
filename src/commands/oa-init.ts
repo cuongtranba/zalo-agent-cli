@@ -219,6 +219,7 @@ interface InitResult {
 }
 
 export function registerOAInitCommand(oaCommand: Command, program: Command): void {
+    const json = () => program.opts().json;
     oaCommand
         .command("init")
         .description("Setup wizard for Zalo OA — works interactive (human) and non-interactive (agent)")
@@ -243,7 +244,6 @@ export function registerOAInitCommand(oaCommand: Command, program: Command): voi
                 skipWebhook?: boolean;
                 skipLogin?: boolean;
             }) => {
-                const json = () => program.opts().json;
                 // Agent mode: when --app-id is provided, skip all interactive prompts
                 const agentMode = !!opts.appId;
                 const result: InitResult = { steps: [], ok: true };

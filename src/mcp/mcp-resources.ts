@@ -104,6 +104,7 @@ export function registerInboxResource(
 
     // Detach from the shared buffer when this session's transport closes
     const previousOnClose = server.server.onclose;
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- MCP SDK callback property, not an EventTarget
     server.server.onclose = () => {
         previousOnClose?.();
         stopListening();

@@ -116,10 +116,13 @@ export class ZaloNotifier {
         const suffix = count > 3 ? `\n...và ${count - 3} tin nhắn khác` : "";
         const text = `🔔 ${count} tin nhắn mới [${typeBreakdown}] trong ${this._formatWindow()}:\n${preview}${suffix}`;
 
+        // onMessage only queues messages when a notify thread is set
+        const notifyThread = this._notifyThread;
+        if (!notifyThread) return;
+
         try {
             // threadType 1 = Group conversation
-            // _notifyThread is set: onMessage only queues messages when it is
-            await this._getApi().sendMessage(text, this._notifyThread!, 1);
+            await this._getApi().sendMessage(text, notifyThread, 1);
         } catch (err) {
             console.error("Notifier send failed:", (err as Error).message);
         }

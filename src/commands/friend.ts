@@ -23,7 +23,7 @@ interface UserLike {
 
 /** Extract numeric error code from zca-js error message string. */
 function extractErrorCode(msg: unknown): number | null {
-    const match = String(msg).match(/\((\-?\d+)\)/);
+    const match = String(msg).match(/\((-?\d+)\)/);
     return match ? Number(match[1]) : null;
 }
 

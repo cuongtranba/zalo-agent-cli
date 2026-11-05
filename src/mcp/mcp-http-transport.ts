@@ -46,6 +46,9 @@ interface HTTPSession {
     lastActivity: number;
 }
 
+const jsonRpcError = (res: Response, status: number, code: number, message: string) =>
+    res.status(status).json({ jsonrpc: "2.0", error: { code, message }, id: null });
+
 /**
  * Create HTTP MCP server with optional bearer token auth.
  * @param registerServerFn - Registers tools and resources on a McpServer instance
@@ -88,9 +91,6 @@ export function createHTTPServer(
     const sessions = new Map<string, HTTPSession>();
     const idleTimeoutMs = parseDuration(deps.config?.limits?.sessionIdleTimeout ?? "30m") || DEFAULT_IDLE_TIMEOUT_MS;
 
-    const jsonRpcError = (res: Response, status: number, code: number, message: string) =>
-        res.status(status).json({ jsonrpc: "2.0", error: { code, message }, id: null });
-
     /** Create a server+transport pair for a new session; registered in `sessions` once initialized */
     const createSession = async (): Promise<HTTPSession> => {
         const server = new McpServer({ name: "zalo-agent", version: pkg.version });
@@ -105,6 +105,7 @@ export function createHTTPServer(
             },
         });
         const session: HTTPSession = { transport, server, openRequests: 0, lastActivity: Date.now() };
+        // oxlint-disable-next-line unicorn/prefer-add-event-listener -- MCP SDK callback property, not an EventTarget
         transport.onclose = () => {
             if (transport.sessionId) sessions.delete(transport.sessionId);
             server.close().catch(() => {});
@@ -126,6 +127,7 @@ export function createHTTPServer(
     };
 
     // MCP endpoint — POST carries requests, GET opens the notification stream, DELETE ends the session
+    // oxlint-disable-next-line oxc/no-async-endpoint-handlers -- Express 5 forwards rejected promises; the body also has its own try/catch
     app.all("/mcp", async (req, res) => {
         try {
             if (!["POST", "GET", "DELETE"].includes(req.method)) {

@@ -393,7 +393,7 @@ export function registerTools(
                     const friends = await api.getAllFriends();
                     const recent = (Array.isArray(friends) ? friends : [])
                         .filter((f) => f.lastActionTime > 0)
-                        .sort((a, b) => b.lastActionTime - a.lastActionTime)
+                        .toSorted((a, b) => b.lastActionTime - a.lastActionTime)
                         .slice(0, limit);
                     for (const f of recent) {
                         conversations.push({

@@ -300,7 +300,7 @@ export function registerListenCommand(program: Command): void {
                 }
 
                 // Keep alive until Ctrl+C
-                await new Promise<void>((resolve) => {
+                await new Promise<void>((resolveKeepAlive) => {
                     process.once("SIGINT", () => {
                         shuttingDown = true;
                         try {
@@ -310,7 +310,7 @@ export function registerListenCommand(program: Command): void {
                         }
                         info(`Stopped. Uptime: ${uptime()}, events: ${eventCount}, reconnects: ${reconnectCount}`);
                         if (saveDir) info(`Messages saved to: ${saveDir}`);
-                        resolve();
+                        resolveKeepAlive();
                         // Listener + pending timers keep the event loop alive — force exit.
                         process.exit(0);
                     });

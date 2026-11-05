@@ -20,9 +20,9 @@ const OA_CREDS_FILE = join(DATA_DIR, "oa-credentials.json");
 export interface OAResponse {
     error?: number;
     message?: string;
-    // Untyped boundary: endpoint-specific payload, shape not guaranteed by Zalo.
+    // oxlint-disable-next-line typescript/no-explicit-any -- untyped boundary: endpoint-specific payload, shape not guaranteed by Zalo
     data?: any;
-    // Untyped boundary: other top-level fields vary per endpoint.
+    // oxlint-disable-next-line typescript/no-explicit-any -- untyped boundary: other top-level fields vary per endpoint
     [key: string]: any;
 }
 

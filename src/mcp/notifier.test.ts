@@ -123,30 +123,28 @@ describe("ZaloNotifier flush", () => {
         { timeout: 2000 },
         async () => {
             const sent: string[] = [];
-            let releaseFirstSend: (value: SendMessageResponse) => void = () => {};
-            let firstSendStarted: () => void = () => {};
-            let secondSendDone: () => void = () => {};
-            const started = new Promise<void>((r) => (firstSendStarted = r));
-            const secondSent = new Promise<void>((r) => (secondSendDone = r));
+            const releaseFirstSend = Promise.withResolvers<SendMessageResponse>();
+            const firstSendStarted = Promise.withResolvers<void>();
+            const secondSendDone = Promise.withResolvers<void>();
             // The first send stays pending until the test releases it
             const api = {
                 sendMessage: (message: string | MessageContent) => {
                     sent.push(String(message));
                     if (sent.length === 1) {
-                        firstSendStarted();
-                        return new Promise<SendMessageResponse>((release) => (releaseFirstSend = release));
+                        firstSendStarted.resolve();
+                        return releaseFirstSend.promise;
                     }
-                    secondSendDone();
+                    secondSendDone.resolve();
                     return Promise.resolve(SENT);
                 },
             };
             const n = new ZaloNotifier(() => api, enabledConfig());
 
             n.onMessage(dmMsg("first"));
-            await started;
+            await firstSendStarted.promise;
             n.onMessage(dmMsg("during send"));
-            releaseFirstSend(SENT);
-            await secondSent;
+            releaseFirstSend.resolve(SENT);
+            await secondSendDone.promise;
 
             assert.equal(sent.length, 2);
             assert.ok(sent[0].includes("first") && !sent[0].includes("during send"));

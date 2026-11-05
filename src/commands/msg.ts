@@ -572,11 +572,11 @@ export function registerMsgCommands(program: Command): void {
                 let done = false;
 
                 // Start listener (required for WebSocket requestOldMessages)
-                await new Promise<void>((resolve, reject) => {
+                await new Promise<void>((resolveConnected, reject) => {
                     const timer = setTimeout(() => reject(new Error("Listener connection timeout")), 10000);
                     api.listener.on("connected", () => {
                         clearTimeout(timer);
-                        resolve();
+                        resolveConnected();
                     });
                     api.listener.on("error", (err) => {
                         clearTimeout(timer);
@@ -587,15 +587,15 @@ export function registerMsgCommands(program: Command): void {
 
                 // Fetch pages until limit reached or no more messages
                 while (!done && allMessages.length < limit) {
-                    const pageMessages = await new Promise<Message[]>((resolve) => {
+                    const pageMessages = await new Promise<Message[]>((resolvePage) => {
                         const handler = (messages: Message[]) => {
                             clearTimeout(timer);
                             api.listener.removeListener("old_messages", handler);
-                            resolve(messages);
+                            resolvePage(messages);
                         };
                         const timer = setTimeout(() => {
                             api.listener.removeListener("old_messages", handler);
-                            resolve([]);
+                            resolvePage([]);
                         }, timeout);
 
                         api.listener.on("old_messages", handler);
@@ -607,24 +607,27 @@ export function registerMsgCommands(program: Command): void {
                         break;
                     }
 
-                    for (const msg of pageMessages) {
+                    for (const historyMsg of pageMessages) {
                         if (allMessages.length >= limit) break;
                         // API returns messages globally — filter to requested thread
-                        const msgThread = String(msg.threadId || "");
-                        const msgSender = String(msg.data?.uidFrom || "");
+                        const msgThread = String(historyMsg.threadId || "");
+                        const msgSender = String(historyMsg.data?.uidFrom || "");
                         const target = String(threadId);
                         if (msgThread !== target && msgSender !== target) continue;
                         allMessages.push({
-                            msgId: msg.data?.msgId,
-                            threadId: msg.threadId,
-                            senderId: msg.data?.uidFrom || null,
-                            senderName: msg.data?.dName || null,
+                            msgId: historyMsg.data?.msgId,
+                            threadId: historyMsg.threadId,
+                            senderId: historyMsg.data?.uidFrom || null,
+                            senderName: historyMsg.data?.dName || null,
                             text:
-                                typeof msg.data?.content === "string"
-                                    ? msg.data.content
-                                    : extractMessageText(msg.data?.content, msg.data?.msgType),
-                            timestamp: msg.data?.ts ? Number(msg.data.ts) : null,
-                            type: typeof msg.data?.content === "string" ? "text" : msg.data?.msgType || "attachment",
+                                typeof historyMsg.data?.content === "string"
+                                    ? historyMsg.data.content
+                                    : extractMessageText(historyMsg.data?.content, historyMsg.data?.msgType),
+                            timestamp: historyMsg.data?.ts ? Number(historyMsg.data.ts) : null,
+                            type:
+                                typeof historyMsg.data?.content === "string"
+                                    ? "text"
+                                    : historyMsg.data?.msgType || "attachment",
                         });
                     }
 
