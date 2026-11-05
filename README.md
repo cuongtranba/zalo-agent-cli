@@ -1,255 +1,128 @@
-<p align="center">
-  <img src="assets/mascot.png" width="120" alt="zalo-agent-cli mascot" />
-</p>
-
 # zalo-agent-cli
 
-<p align="center">
-  <img src="assets/demo.gif" alt="zalo-agent-cli demo" />
-</p>
-
 [![npm version](https://img.shields.io/npm/v/zalo-mcp.svg)](https://www.npmjs.com/package/zalo-mcp)
-[![npm downloads](https://img.shields.io/npm/dm/zalo-mcp.svg)](https://www.npmjs.com/package/zalo-mcp)
-[![npm total downloads](https://img.shields.io/npm/dt/zalo-mcp.svg)](https://www.npmjs.com/package/zalo-mcp)
-[![license](https://img.shields.io/npm/l/zalo-mcp.svg)](https://github.com/cuongtranba/zalo-agent-cli/blob/main/LICENSE)
+[![license](https://img.shields.io/npm/l/zalo-mcp.svg)](LICENSE)
 
-Công cụ CLI tự động hóa Zalo — đa tài khoản, proxy, chuyển khoản ngân hàng, thanh toán QR.
-Xây dựng trên [zca-js](https://github.com/RFS-ADRENO/zca-js).
+Zalo automation for scripts and AI agents: a CLI (`zalo-agent`) and an MCP server for personal Zalo accounts, plus a client for the official Zalo Official Account (OA) API.
 
-> Fork của [PhucMPham/zalo-agent-cli](https://github.com/PhucMPham/zalo-agent-cli), phát hành trên npm với tên `zalo-mcp`.
-
-**[Tiếng Việt](#bắt-đầu-nhanh)** | **[English](#english)**
+Published on npm as `zalo-mcp`. Built on [zca-js](https://github.com/RFS-ADRENO/zca-js). Forked from [PhucMPham/zalo-agent-cli](https://github.com/PhucMPham/zalo-agent-cli).
 
 > [!WARNING]
-> Tool này sử dụng API Zalo **không chính thức** ([zca-js](https://github.com/RFS-ADRENO/zca-js)). Zalo không hỗ trợ và **tài khoản của bạn có thể bị khóa hoặc ban**. Tự chịu trách nhiệm. Không liên kết với Zalo hay VNG. Xem [DISCLAIMER.md](DISCLAIMER.md).
+> Personal-account features use the **unofficial** Zalo API (zca-js). Zalo may restrict or ban the account. Not affiliated with Zalo or VNG. See [DISCLAIMER.md](DISCLAIMER.md).
 
-> [!TIP]
-> **AI Agent Skill** — Dùng với OpenClaw, Claude Code, hoặc bất kỳ agent nào hỗ trợ SKILL.md:
-> ```bash
-> cp -r skill/ ~/.claude/skills/zalo-agent/   # Claude Code
-> ```
-> 15+ nhóm lệnh · listen mode + webhook · 55+ ngân hàng VN · đa tài khoản + proxy
-> Xem [skill/SKILL.md](skill/SKILL.md) · [Eval scenarios](skill/evals/)
+## Install
 
-> [!NOTE]
-> **Zalo Official Account (OA)** — v1.1.0 hỗ trợ Zalo OA API v3.0 chính thức:
-> ```bash
-> zalo-agent oa init                                    # Setup wizard (interactive)
-> zalo-agent oa init --app-id <ID> --secret <KEY> --skip-webhook  # Non-interactive (AI agent)
-> zalo-agent oa whoami                                  # Xem thông tin OA
-> zalo-agent oa msg text <user-id> "Xin chào"           # Gửi tin nhắn
-> zalo-agent oa listen -p 3000                           # Webhook listener
-> ```
-> OAuth login · gửi tin nhắn · quản lý follower · tag · webhook listener · VPS support
-> Xem [docs/official-account.md](docs/official-account.md)
-
-> [!TIP]
-> **MCP Server (AI Agent Integration)** — v1.2.0 hỗ trợ Model Context Protocol cho Claude Code và các MCP client:
-> ```bash
-> zalo-agent mcp start              # stdio (local Claude Code)
-> zalo-agent mcp start --http 3847 --auth your-secret  # HTTP at http://host:3847/mcp (VPS, agents)
-> ```
-> 12 tools: read · history · send (reply, mention) · send_attachment · react · list/search threads · list_conversations · group members · user info · mark_read · view_media
-> Auto-reconnect · thread filter · noise reduction · group notifications
-> Push: đăng ký (subscribe) resource `zalo://inbox` để nhận `notifications/resources/updated` khi có tin mới (best-effort, vẫn nên polling bằng cursor)
-> Xem [MCP Guide](skill/references/mcp-guide.md)
-
----
-
-## Cài đặt
-
-Yêu cầu: [Bun](https://bun.sh) >= 1.4.2 (không còn hỗ trợ Node.js).
+Requires [Bun](https://bun.sh) >= 1.4.2. Node.js is not supported.
 
 ```bash
 bun add -g zalo-mcp
+zalo-agent --version
 ```
 
-Hoặc tải file chạy độc lập (không cần cài Bun) từ [trang Releases](https://github.com/cuongtranba/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64`, `zalo-agent-windows-x64.exe` (kèm `SHA256SUMS`).
+Standalone binaries (no Bun needed) are attached to each [release](https://github.com/cuongtranba/zalo-agent-cli/releases/latest): `zalo-agent-{linux-x64,linux-arm64,darwin-x64,darwin-arm64,windows-x64.exe}` with `SHA256SUMS`.
 
-> `npm install -g zalo-mcp` vẫn cài được gói, nhưng lệnh `zalo-agent` chỉ chạy khi `bun` có trong `PATH`.
-
-## Bắt đầu nhanh
-
-### 1. Đăng nhập
+## Quick start
 
 ```bash
-zalo-agent login
+zalo-agent login                              # scan the QR with Zalo app > Scan QR
+zalo-agent status                             # check the session
+zalo-agent friend search "Name"               # find a user ID
+zalo-agent listen                             # print incoming messages with their threadId
+zalo-agent msg send <THREAD_ID> "Hello"       # send to a user
+zalo-agent msg send <THREAD_ID> "Hello" -t 1  # send to a group
 ```
 
-Quét QR bằng **Zalo app > Quét mã QR**. Thông tin tự động lưu.
+Add `--json` to any command for machine-readable output.
 
-### 2. Tìm bạn bè
+## MCP server
+
+Exposes a logged-in personal account to MCP clients (Claude Code, Claude Desktop, other agents).
 
 ```bash
-zalo-agent friend search "Phúc"
+zalo-agent login                                                # once, before starting the server
+claude mcp add zalo -- zalo-agent mcp start                     # stdio, for a local client
+zalo-agent mcp start --http 3847 --auth <token>                 # HTTP at http://127.0.0.1:3847/mcp
+zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # remote access (--auth required)
 ```
 
-### 3. Lắng nghe tin nhắn (lấy thread ID)
+| Tool | Purpose |
+|------|---------|
+| `zalo_get_messages` | Read buffered incoming messages (cursor `since`) |
+| `zalo_mark_read` | Drop buffered messages up to a cursor |
+| `zalo_list_threads` | Buffered threads with unread counts |
+| `zalo_search_threads` | Find a DM or group by name (accent-insensitive) |
+| `zalo_list_conversations` | Recent DMs and groups from the account |
+| `zalo_get_history` | Older messages from the server (about 2 weeks) |
+| `zalo_send_message` | Send text; optional reply and @mentions |
+| `zalo_send_attachment` | Send files or images from paths or URLs (25 MB cap) |
+| `zalo_react` | React to a message |
+| `zalo_get_group_members` | Group members with admin flags |
+| `zalo_get_user_info` | Public profile of a user ID |
+| `zalo_view_media` | Open a received image, audio or video file |
+
+Clients can subscribe to the `zalo://inbox` resource to be notified of new messages; cursor polling stays the source of truth. Exit code `78` means the saved session is missing or expired: run `zalo-agent login` again. Config: `~/.zalo-agent-cli/mcp-config.json`. Full guide: [skill/references/mcp-guide.md](skill/references/mcp-guide.md).
+
+## Command groups
+
+Run `zalo-agent <group> --help` for subcommands and flags.
+
+| Group | What it does |
+|-------|--------------|
+| `login`, `logout`, `status`, `whoami` | QR login and session |
+| `account` | Multiple accounts, one proxy per account, export |
+| `msg` | Text, images, files, voice, video, stickers, links, contact cards, bank cards, VietQR, reactions, recall, history |
+| `friend` | List, search, add, accept, remove, block, aliases |
+| `group` | Create, members, admins, settings, links, notes |
+| `conv` | Mute, pin, archive, hide, read state, auto-delete |
+| `profile` | Profile, avatar, privacy settings |
+| `poll`, `reminder`, `auto-reply`, `quick-msg`, `label`, `catalog` | Zalo features of the same name |
+| `listen` | Real-time listener; `--webhook <url>`, `--save <dir>` (JSONL), `--filter user\|group\|all` |
+| `oa` | Official Account API v3.0: OAuth, messages, followers, tags, articles, store, webhook listener |
+| `mcp start` | MCP server (see above) |
+| `update` | Update the CLI |
+
+## Official Account (OA)
+
+Uses the official, documented OA API v3.0. It is separate from the personal-account login.
 
 ```bash
-zalo-agent listen
+zalo-agent oa init                                              # interactive setup
+zalo-agent oa init --app-id <ID> --secret <KEY> --skip-webhook  # non-interactive
+zalo-agent oa msg text <user-id> "Hello"
+zalo-agent oa listen -p 3000                                    # webhook listener
 ```
 
-Mỗi tin nhắn đến sẽ hiện `threadId`. Dùng `--json` để lấy dạng JSON.
+Guide: [docs/official-account.md](docs/official-account.md).
 
-### 4. Gửi tin nhắn
+## Agent skill
+
+[`skill/`](skill/SKILL.md) teaches an agent to drive the CLI. For Claude Code:
 
 ```bash
-# Gửi cho cá nhân
-zalo-agent msg send <THREAD_ID> "Xin chào!"
-
-# Gửi vào nhóm
-zalo-agent msg send <THREAD_ID> "Xin chào nhóm!" -t 1
+cp -r skill/ ~/.claude/skills/zalo-agent/
 ```
 
----
+## Local data
 
-## Danh sách lệnh
+| Path | Content |
+|------|---------|
+| `~/.zalo-agent-cli/accounts.json`, `~/.zalo-agent-cli/credentials/` | Personal-account sessions (plain JSON, mode 0600) |
+| `~/.zalo-agent-cli/mcp-config.json` | MCP server config |
+| `~/.zalo-agent-cli/media/` | Media downloaded by the MCP server |
+| `~/.zalo-agent/oa-credentials.json` | OA tokens |
 
-Tất cả lệnh hỗ trợ `--json`. Tài liệu đầy đủ: **[Wiki](https://github.com/PhucMPham/zalo-agent-cli/wiki)**
+Treat these files as secrets.
 
-| Nhóm lệnh | Mô tả | Docs |
-|------------|--------|------|
-| `msg` | Gửi tin nhắn, hình, file, voice, video, sticker, link, thẻ chuyển khoản, QR | [Tin nhắn](https://github.com/PhucMPham/zalo-agent-cli/wiki/Tin-Nh%E1%BA%AFn) |
-| `friend` | Danh sách, tìm, thêm, xóa, chặn, biệt danh, gợi ý | [Bạn bè](https://github.com/PhucMPham/zalo-agent-cli/wiki/B%E1%BA%A1n-B%C3%A8) |
-| `group` | Tạo, đổi tên, thành viên, cài đặt, link, ghi chú, lời mời | [Nhóm & Cộng đồng](https://github.com/PhucMPham/zalo-agent-cli/wiki/Nh%C3%B3m) |
-| `conv` | Tắt thông báo, ghim, lưu trữ, ẩn hội thoại, tự xóa | [Hội thoại](https://github.com/PhucMPham/zalo-agent-cli/wiki/H%E1%BB%99i-Tho%E1%BA%A1i) |
-| `profile` | Xem/cập nhật hồ sơ, ảnh đại diện, quyền riêng tư | [Hồ sơ](https://github.com/PhucMPham/zalo-agent-cli/wiki/H%E1%BB%93-S%C6%A1) |
-| `poll` | Tạo, bỏ phiếu, đóng khảo sát | [Khảo sát](https://github.com/PhucMPham/zalo-agent-cli/wiki/Kh%E1%BA%A3o-S%C3%A1t) |
-| `reminder` | Tạo, sửa, xóa nhắc nhở | [Nhắc nhở](https://github.com/PhucMPham/zalo-agent-cli/wiki/Nh%E1%BA%AFc-Nh%E1%BB%9F) |
-| `auto-reply` | Quản lý trả lời tự động | [Trả lời tự động](https://github.com/PhucMPham/zalo-agent-cli/wiki/Tr%E1%BA%A3-L%E1%BB%9Di-T%E1%BB%B1-%C4%90%E1%BB%99ng) |
-| `quick-msg` | Tin nhắn nhanh đã lưu | [Tin nhắn nhanh](https://github.com/PhucMPham/zalo-agent-cli/wiki/Tin-Nh%E1%BA%AFn-Nhanh) |
-| `label` | Nhãn hội thoại | [Nhãn](https://github.com/PhucMPham/zalo-agent-cli/wiki/Nh%C3%A3n) |
-| `catalog` | zBusiness — danh mục sản phẩm | [zBusiness](https://github.com/PhucMPham/zalo-agent-cli/wiki/zBusiness) |
-| `listen` | Lắng nghe tin nhắn real-time, webhook, lưu JSONL | [Lắng nghe](https://github.com/PhucMPham/zalo-agent-cli/wiki/L%E1%BA%AFng-Nghe) |
-| `account` | Đa tài khoản & proxy | [Tài khoản](https://github.com/PhucMPham/zalo-agent-cli/wiki/T%C3%A0i-Kho%E1%BA%A3n) |
-| **`oa`** | **Zalo Official Account API v3.0 — OAuth, tin nhắn, follower, tag, webhook** | **[Official Account](https://github.com/PhucMPham/zalo-agent-cli/wiki/Official-Account)** |
-
-Xem thêm: [Đa tài khoản & Proxy](https://github.com/PhucMPham/zalo-agent-cli/wiki/%C4%90a-T%C3%A0i-Kho%E1%BA%A3n-&-Proxy) · [Cài đặt VPS](https://github.com/PhucMPham/zalo-agent-cli/wiki/C%C3%A0i-%C4%90%E1%BA%B7t-VPS) · [Thẻ chuyển khoản & QR](https://github.com/PhucMPham/zalo-agent-cli/wiki/Th%E1%BA%BB-Chuy%E1%BB%83n-Kho%E1%BA%A3n-&-QR) · [Official Account](https://github.com/PhucMPham/zalo-agent-cli/wiki/Official-Account)
-
----
-
-## Tính năng
-
-- Đăng nhập QR qua HTTP server tự động (browser + terminal)
-- Đa tài khoản với proxy riêng biệt (1:1)
-- 90+ lệnh phủ hết tính năng Zalo
-- **Zalo Official Account (OA) API v3.0** — OAuth login, gửi tin nhắn, quản lý follower, webhook listener
-- Thẻ chuyển khoản (55+ ngân hàng VN) & QR VietQR
-- Lắng nghe real-time với webhook & lưu JSONL local
-- Output `--json` cho mọi lệnh — scripting & AI agents
-- Credentials mã hóa tại chỗ (quyền 0600)
-- **Dual mode**: interactive (human) + non-interactive (AI agents, CI/CD)
-
----
-
-## Ủng hộ
-
-Nếu tool này giúp bạn tiết kiệm thời gian, hãy mua cho chúng tôi một ly cà phê!
-
-<p align="center">
-  <img src="assets/donate-qr.jpg" width="280" alt="Donate qua VietQR (OCB)" />
-  <br/>
-  <em>Quét bằng app ngân hàng bất kỳ</em>
-</p>
-
----
-
-## English
-
-CLI tool for Zalo automation — multi-account, proxy support, bank transfers, QR payments.
-
-> Forked from [PhucMPham/zalo-agent-cli](https://github.com/PhucMPham/zalo-agent-cli), published on npm as `zalo-mcp`.
-
-> [!TIP]
-> **AI Agent Skill** — Use with OpenClaw, Claude Code, or any SKILL.md-compatible agent:
-> ```bash
-> cp -r skill/ ~/.claude/skills/zalo-agent/     # Claude Code
-> ```
-> 15+ command groups · listen mode + webhook · 55+ VN banks · multi-account + proxy
-> See [skill/SKILL.md](skill/SKILL.md) · [Eval scenarios](skill/evals/)
-
-> [!NOTE]
-> **Zalo Official Account (OA)** — v1.1.0 adds official Zalo OA API v3.0:
-> ```bash
-> zalo-agent oa init                                    # Setup wizard (interactive)
-> zalo-agent oa init --app-id <ID> --secret <KEY> --skip-webhook  # Non-interactive (AI agent)
-> zalo-agent oa whoami                                  # OA profile
-> zalo-agent oa msg text <user-id> "Hello"              # Send message
-> zalo-agent oa listen -p 3000                           # Webhook listener
-> ```
-> OAuth login · messaging · follower management · tags · webhook listener · VPS support
-> See [docs/official-account.md](docs/official-account.md)
-
-> [!TIP]
-> **MCP Server (AI Agent Integration)** — v1.2.0 adds Model Context Protocol support for Claude Code and MCP clients:
-> ```bash
-> zalo-agent mcp start              # stdio (local Claude Code)
-> zalo-agent mcp start --http 3847 --auth your-secret  # HTTP at http://host:3847/mcp (VPS, agents)
-> ```
-> 12 tools: read · history · send (reply, mention) · send_attachment · react · list/search threads · list_conversations · group members · user info · mark_read · view_media
-> Auto-reconnect · thread filter · noise reduction · group notifications
-> Push: subscribe to the `zalo://inbox` resource to get `notifications/resources/updated` on new messages (best-effort; keep cursor polling)
-> See [MCP Guide](skill/references/mcp-guide.md)
-
-### Install
-
-Requires [Bun](https://bun.sh) >= 1.4.2 (Node.js is no longer supported).
+## Development
 
 ```bash
-bun add -g zalo-mcp
+bun install
+bun src/index.ts --help   # run from source
+bun run check             # typecheck, lint, format check, tests
 ```
 
-Or download a standalone binary (no Bun needed) from the [Releases page](https://github.com/cuongtranba/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64` or `zalo-agent-windows-x64.exe`, with a `SHA256SUMS` file.
-
-> `npm install -g zalo-mcp` still installs the package, but the `zalo-agent` command only runs when `bun` is on your `PATH`.
-
-### Quick Start
-
-```bash
-zalo-agent login                           # 1. Login via QR
-zalo-agent friend search "Name"            # 2. Find a friend
-zalo-agent listen                          # 3. Listen for threadId
-zalo-agent msg send <THREAD_ID> "Hello!"   # 4. Send a message
-```
-
-### Commands
-
-Full docs: **[Wiki](https://github.com/PhucMPham/zalo-agent-cli/wiki)**
-
-| Group | Description | Docs |
-|-------|-------------|------|
-| `msg` | Text, images, files, voice, video, stickers, links, bank cards, QR | [Messages](https://github.com/PhucMPham/zalo-agent-cli/wiki/Messages) |
-| `friend` | List, find, add, remove, block, alias, recommendations | [Friends](https://github.com/PhucMPham/zalo-agent-cli/wiki/Friends) |
-| `group` | Create, rename, members, settings, links, notes, invites | [Groups](https://github.com/PhucMPham/zalo-agent-cli/wiki/Groups) |
-| `conv` | Mute, pin, archive, hidden, auto-delete | [Conversations](https://github.com/PhucMPham/zalo-agent-cli/wiki/Conversations) |
-| `profile` | Profile, avatar gallery, privacy | [Profile](https://github.com/PhucMPham/zalo-agent-cli/wiki/Profile) |
-| `poll` | Create, vote, lock polls | [Polls](https://github.com/PhucMPham/zalo-agent-cli/wiki/Polls) |
-| `reminder` | Create, edit, remove reminders | [Reminders](https://github.com/PhucMPham/zalo-agent-cli/wiki/Reminders) |
-| `auto-reply` | Auto-reply rules | [Auto-Reply](https://github.com/PhucMPham/zalo-agent-cli/wiki/Auto-Reply) |
-| `quick-msg` | Saved quick messages | [Quick Messages](https://github.com/PhucMPham/zalo-agent-cli/wiki/Quick-Messages) |
-| `label` | Conversation labels | [Labels](https://github.com/PhucMPham/zalo-agent-cli/wiki/Labels) |
-| `catalog` | zBusiness catalogs & products | [Catalog](https://github.com/PhucMPham/zalo-agent-cli/wiki/Catalog) |
-| `listen` | Real-time listener, webhook, JSONL | [Listener](https://github.com/PhucMPham/zalo-agent-cli/wiki/Listener) |
-| `account` | Multi-account & proxy | [Accounts](https://github.com/PhucMPham/zalo-agent-cli/wiki/Accounts) |
-| **`oa`** | **Zalo Official Account API v3.0 — OAuth, messaging, followers, webhook** | **[Official Account](https://github.com/PhucMPham/zalo-agent-cli/wiki/Official-Account)** |
-
-### Support Us
-
-If this tool saves you time, consider buying us a coffee!
-
-<p align="center">
-  <img src="assets/donate-qr.jpg" width="280" alt="Donate via VietQR (OCB)" />
-  <br/>
-  <em>Scan with any Vietnamese banking app</em>
-</p>
-
----
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=cuongtranba/zalo-agent-cli&type=Date)](https://star-history.com/#cuongtranba/zalo-agent-cli&Date)
+Agent and contributor notes: [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md), [TEST.md](TEST.md), [RELEASING.md](RELEASING.md).
 
 ## License
 
-[MIT](LICENSE) · See [DISCLAIMER.md](DISCLAIMER.md) for full terms.
+[MIT](LICENSE). See [DISCLAIMER.md](DISCLAIMER.md).

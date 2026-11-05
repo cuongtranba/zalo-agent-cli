@@ -28,8 +28,7 @@ import { autoLogin } from "./core/zalo-client.ts";
 import { checkForUpdates, selfUpdate } from "./utils/update-check.ts";
 import { success, error, warning } from "./utils/output.ts";
 
-const DISCLAIMER =
-    "This tool uses unofficial Zalo APIs (zca-js) — your account may be banned. Use at your own risk. | Tool này dùng API Zalo không chính thức (zca-js) — account có thể bị ban. Tự chịu trách nhiệm.";
+const DISCLAIMER = "This tool uses unofficial Zalo APIs (zca-js) — your account may be banned. Use at your own risk.";
 
 const program = new Command();
 

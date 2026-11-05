@@ -122,7 +122,7 @@ Contains: appId, secretKey, accessToken, refreshToken, expiresIn, webhookUrl, ve
 ## Webhook Setup Checklist
 
 1. developers.zalo.me → Official Account → Callback URL: `http://localhost:3456/callback`
-2. Đăng ký sử dụng API → Official Account API → toggle ON
-3. Official Account → Chọn quyền → tick all → Lưu
-4. Xác thực domain (serve verification file or meta tag)
-5. Webhook → set HTTPS URL → bật events
+2. Đăng ký sử dụng API (Register API usage) → Official Account API → toggle ON
+3. Official Account → Chọn quyền (Select permissions) → tick all → Lưu (Save)
+4. Xác thực domain (Domain verification): serve the verification file or meta tag
+5. Webhook → set HTTPS URL → enable events

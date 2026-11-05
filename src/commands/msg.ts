@@ -228,7 +228,7 @@ export function registerMsgCommands(program: Command): void {
         });
 
     msg.command("send-card <threadId> <userId>")
-        .description("Send a contact card (danh thiếp)")
+        .description("Send a contact card")
         .option("-t, --type <n>", "Thread type: 0=User, 1=Group", "0")
         .option("--phone <num>", "Phone number (auto-fetched if omitted)")
         .action(async (threadId: string, userId: string, opts: { type: string; phone?: string }) => {
@@ -251,7 +251,7 @@ export function registerMsgCommands(program: Command): void {
         });
 
     msg.command("send-bank <threadId> <accountNumber>")
-        .description("Send a bank card (số tài khoản)")
+        .description("Send a bank account card")
         .requiredOption("-b, --bank <name>", "Bank name (ocb, vcb, bidv) or BIN code")
         .option("-t, --type <n>", "Thread type: 0=User, 1=Group", "0")
         .option("-n, --name <holder>", "Account holder name")

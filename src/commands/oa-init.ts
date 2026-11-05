@@ -357,12 +357,11 @@ export function registerOAInitCommand(oaCommand: Command, program: Command): voi
                 if (!agentMode) {
                     info("Step 3/5 — Prerequisite Checklist");
                     console.log("  Verify these at developers.zalo.me:\n");
-                    console.log("  ┌──────────────────────────────────────────────────────────┐");
-                    console.log("  │  □ Official Account → Thiết lập chung → Callback URL    │");
-                    console.log("  │    Set to: http://localhost:3456/callback                │");
-                    console.log("  │  □ Đăng ký sử dụng API → Official Account API → ON      │");
-                    console.log("  │  □ Official Account → Chọn quyền → tick all → Lưu       │");
-                    console.log("  └──────────────────────────────────────────────────────────┘");
+                    // Menu labels stay in Vietnamese because that is what the Zalo developer console shows
+                    console.log("  □ Official Account → Thiết lập chung (General settings) → Callback URL");
+                    console.log("      Set to: http://localhost:3456/callback");
+                    console.log("  □ Đăng ký sử dụng API (API registration) → Official Account API → ON");
+                    console.log("  □ Official Account → Chọn quyền (Permissions) → tick all → Lưu (Save)");
                     await waitForEnter("Done? Press Enter to continue...", false);
                     console.log();
                 }
@@ -484,14 +483,14 @@ export function registerOAInitCommand(oaCommand: Command, program: Command): voi
                                 success(`Tunnel: ${tunnelUrl}`);
                                 console.log();
                                 info("At developers.zalo.me:");
-                                console.log(`  1. Xác thực domain: ${tunnelUrl.replace("https://", "")}`);
+                                console.log(`  1. Verify domain: ${tunnelUrl.replace("https://", "")}`);
                                 console.log(`  2. Webhook URL: ${webhookUrl}`);
-                                console.log("  3. Bật events: user_send_text, follow, etc\n");
+                                console.log("  3. Enable events: user_send_text, follow, etc\n");
 
                                 const verifyCode = await ask("  Verification code: ", false);
                                 if (verifyCode) {
                                     saveOACreds({ verifyCode }, opts.oaId);
-                                    success("Code saved — click 'Xác thực' in Zalo");
+                                    success("Code saved — click 'Xác thực' (Verify) in Zalo");
                                 }
                                 await waitForEnter("Webhook setup done? Press Enter...", false);
                             } else if (opts.verifyCode) {
