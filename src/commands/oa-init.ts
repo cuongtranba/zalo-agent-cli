@@ -430,7 +430,7 @@ export function registerOAInitCommand(oaCommand: Command, program: Command): voi
                     } else if (tunnelType === "server") {
                         if (!agentMode) {
                             info("Deploy on your server:");
-                            console.log("    npm install -g zalo-agent-cli");
+                            console.log("    bun add -g zalo-agent-cli");
                             console.log("    zalo-agent oa setup <access-token>");
                             console.log("    zalo-agent oa listen -p 3000 -s <secret>\n");
                             const serverUrl = await ask("  Server webhook URL: ", false);

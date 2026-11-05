@@ -57,9 +57,15 @@ Xây dựng trên [zca-js](https://github.com/RFS-ADRENO/zca-js).
 
 ## Cài đặt
 
+Yêu cầu: [Bun](https://bun.sh) >= 1.4.2 (không còn hỗ trợ Node.js).
+
 ```bash
-npm install -g zalo-agent-cli
+bun add -g zalo-agent-cli
 ```
+
+Hoặc tải file chạy độc lập (không cần cài Bun) từ [trang Releases](https://github.com/PhucMPham/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64`, `zalo-agent-windows-x64.exe` (kèm `SHA256SUMS`).
+
+> `npm install -g zalo-agent-cli` vẫn cài được gói, nhưng lệnh `zalo-agent` chỉ chạy khi `bun` có trong `PATH`.
 
 ## Bắt đầu nhanh
 
@@ -184,10 +190,21 @@ CLI tool for Zalo automation — multi-account, proxy support, bank transfers, Q
 > Push: subscribe to the `zalo://inbox` resource to get `notifications/resources/updated` on new messages (best-effort; keep cursor polling)
 > See [MCP Guide](skill/references/mcp-guide.md)
 
+### Install
+
+Requires [Bun](https://bun.sh) >= 1.4.2 (Node.js is no longer supported).
+
+```bash
+bun add -g zalo-agent-cli
+```
+
+Or download a standalone binary (no Bun needed) from the [Releases page](https://github.com/PhucMPham/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64` or `zalo-agent-windows-x64.exe`, with a `SHA256SUMS` file.
+
+> `npm install -g zalo-agent-cli` still installs the package, but the `zalo-agent` command only runs when `bun` is on your `PATH`.
+
 ### Quick Start
 
 ```bash
-npm install -g zalo-agent-cli
 zalo-agent login                           # 1. Login via QR
 zalo-agent friend search "Name"            # 2. Find a friend
 zalo-agent listen                          # 3. Listen for threadId

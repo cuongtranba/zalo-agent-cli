@@ -3,7 +3,7 @@
 ## Running Tests
 
 ```bash
-npm test
+bun test
 ```
 
 Runs unit tests (core/utils) + CLI interface tests. No Zalo session needed.
@@ -14,10 +14,10 @@ Runs unit tests (core/utils) + CLI interface tests. No Zalo session needed.
 
 ### Framework
 
-We use **Node.js built-in test runner** (`node:test` + `node:assert`). No external test framework.
+We use the **Bun test runner** (`bun:test`) with `node:assert/strict` for assertions. No external test framework.
 
-```js
-import { describe, it, before, after } from "node:test";
+```ts
+import { describe, it, beforeAll, afterAll } from "bun:test";
 import assert from "node:assert/strict";
 ```
 
@@ -25,25 +25,25 @@ import assert from "node:assert/strict";
 
 | Pattern | Example | Location |
 |---------|---------|----------|
-| Unit tests | `*.test.js` | Same dir as source: `src/utils/proxy-helpers.test.js` |
-| CLI tests | `cli.test.js` | `src/cli.test.js` |
+| Unit tests | `*.test.ts` | Same dir as source: `src/utils/proxy-helpers.test.ts` |
+| CLI tests | `cli.test.ts` | `src/cli.test.ts` |
 
 Test file must sit **next to** the module it tests:
 
 ```
 src/utils/
-├── bank-helpers.js          # Source
-├── bank-helpers.test.js     # Tests for bank-helpers.js
-├── proxy-helpers.js
-└── proxy-helpers.test.js
+├── bank-helpers.ts          # Source
+├── bank-helpers.test.ts     # Tests for bank-helpers.ts
+├── proxy-helpers.ts
+└── proxy-helpers.test.ts
 ```
 
 ### Test Structure
 
-```js
-import { describe, it } from "node:test";
+```ts
+import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
-import { myFunction } from "./my-module.js";
+import { myFunction } from "./my-module.ts";
 
 describe("myFunction", () => {
     it("does the expected thing", () => {
@@ -74,23 +74,24 @@ assert.equal(typeof result, "string");    // type check
 
 ### Testing File I/O (credentials, accounts)
 
-For modules that read/write files (`credentials.js`, `accounts.js`), use a **temp directory** to avoid touching the real `~/.zalo-agent-cli/`:
+For modules that read/write files (`credentials.ts`, `accounts.ts`), use a **temp directory** to avoid touching the real `~/.zalo-agent-cli/`:
 
-```js
+```ts
+import { beforeAll, afterAll, describe, it } from "bun:test";
 import { mkdtempSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
 describe("credentials", () => {
-    let tmpDir;
+    let tmpDir: string;
 
-    before(() => {
+    beforeAll(() => {
         tmpDir = mkdtempSync(join(tmpdir(), "zalo-test-"));
         // Override CONFIG_DIR if module supports it,
         // or test functions that accept path params
     });
 
-    after(() => {
+    afterAll(() => {
         rmSync(tmpDir, { recursive: true, force: true });
     });
 
@@ -104,14 +105,14 @@ describe("credentials", () => {
 
 Use `execFileSync` to run CLI commands and check output:
 
-```js
+```ts
 import { execFileSync } from "child_process";
 import { resolve } from "path";
 
-const CLI = resolve(import.meta.dirname, "index.js");
+const CLI = resolve(import.meta.dirname, "index.ts");
 
-function run(...args) {
-    return execFileSync("node", [CLI, ...args], {
+function run(...args: string[]) {
+    return execFileSync(process.execPath, [CLI, ...args], {
         encoding: "utf-8",
         timeout: 10000,
         // Use fake HOME to avoid touching real credentials
@@ -148,13 +149,13 @@ These belong in the [Manual E2E Checklist](#manual-e2e-checklist) below.
 When you add a new command, add tests at **two levels**:
 
 **1. Unit test** for the core logic (if any new utility functions):
-```js
-// src/utils/my-new-helper.test.js
+```ts
+// src/utils/my-new-helper.test.ts
 describe("myNewHelper", () => { ... });
 ```
 
-**2. CLI interface test** in `src/cli.test.js`:
-```js
+**2. CLI interface test** in `src/cli.test.ts`:
+```ts
 it("my-new-command --help shows expected options", () => {
     const out = run("my-new-command", "--help");
     assert.match(out, /--expected-flag/);
@@ -166,7 +167,7 @@ it("my-new-command --help shows expected options", () => {
 ### Running a Single Test File
 
 ```bash
-node --test src/utils/proxy-helpers.test.js
+bun test src/utils/proxy-helpers.test.ts
 ```
 
 ### Security in Tests
