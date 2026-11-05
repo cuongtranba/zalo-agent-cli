@@ -58,8 +58,8 @@ zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # mở ra mạng
 - Mặc định server chỉ bind `127.0.0.1`. Dùng `--host 0.0.0.0` để agent ở máy khác kết nối được.
 - Nếu bind vào địa chỉ không phải loopback (`127.0.0.1`, `::1`, `localhost`) mà **không có `--auth`**, server từ chối khởi động.
 - Mọi request tới `/mcp` phải có header `Authorization: Bearer <token>`, sai hoặc thiếu sẽ nhận `401`.
-- `GET /health` không cần token, trả về `{ "status": "ok", "uptime": ..., "threads": ... }` để dùng cho health check.
-- Server chạy stateless: mỗi `POST /mcp` tạo một MCP server riêng, nhưng luôn dùng phiên Zalo hiện tại (kể cả sau khi tự đăng nhập lại).
+- `GET /health` không cần token, trả về `{ "status": "ok", "uptime": ..., "threads": ..., "sessions": ... }` để dùng cho health check.
+- Server chạy theo session: `POST /mcp` với request `initialize` tạo session và trả header `mcp-session-id`; mọi request sau (`POST`, `GET` mở luồng SSE nhận thông báo, `DELETE` kết thúc session) phải gửi lại header này, nếu không sẽ nhận `400`, session không tồn tại nhận `404`. Các MCP client chuẩn (SDK) tự xử lý việc này. Mọi session dùng chung buffer và luôn dùng phiên Zalo hiện tại (kể cả sau khi tự đăng nhập lại). Session không còn request nào đang mở (kể cả luồng `GET`) quá `limits.sessionIdleTimeout` (mặc định 30 phút) sẽ bị đóng; client sau đó nhận `404` và chỉ cần `initialize` lại (SDK chuẩn tự làm khi kết nối lại).
 - Nên đặt reverse proxy HTTPS (nginx, Caddy) phía trước khi mở ra Internet.
 
 ### Chạy nền bằng pm2
@@ -115,6 +115,29 @@ Kết quả của mỗi tool là một khối `text` chứa JSON; khi lỗi, `is
 - **Reply và react chỉ hoạt động với tin nhắn nhận được khi server đang chạy** (còn trong buffer). Tin cũ lấy từ `zalo_get_history` không quote được; với `zalo_react` cần truyền thêm `cliMsgId` nếu biết.
 - **Nguồn của `zalo_send_attachment`** là đường dẫn tuyệt đối **trên máy chạy server** hoặc URL `http(s)`. URL được server tải về thư mục tạm (tối đa 25 MB, timeout 30 giây) rồi xoá sau khi gửi.
 - Buffer nằm trong bộ nhớ: khởi động lại server sẽ mất tin chưa đọc.
+
+---
+
+## Thông báo đẩy (resource `zalo://inbox`)
+
+Server hỗ trợ cơ chế subscribe chuẩn của MCP (`resources/subscribe`) trên cả stdio và HTTP:
+
+- Resource `zalo://inbox` (`application/json`): đọc ra `{ messages, cursor, hasMore }` — cùng dạng với `zalo_get_messages` (các tin chưa `zalo_mark_read`, tối đa `limits.maxMessagesPerPoll`).
+- Client gọi `resources/subscribe` với `{ "uri": "zalo://inbox" }`. Mỗi khi có tin mới vào buffer, server gửi `notifications/resources/updated` với `uri` đó (không kèm nội dung tin).
+- Khi nhận thông báo, client đọc lại `zalo://inbox` hoặc gọi `zalo_get_messages` với `since` là cursor cuối cùng đã xử lý.
+- Thông báo là **best-effort** theo spec MCP (có thể mất khi mất kết nối, hoặc được gộp): luôn giữ polling bằng cursor làm nguồn sự thật.
+- Với HTTP, thông báo đi qua luồng SSE của `GET /mcp` trong session đang mở; client phải giữ `mcp-session-id`.
+- Nhiều host (như Claude Code) chỉ đọc lại resource khi nhận thông báo, **không** tự đánh thức model; muốn agent phản ứng ngay, hãy dùng client tự xử lý thông báo rồi gọi tool.
+
+```js
+import { ResourceUpdatedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
+
+client.setNotificationHandler(ResourceUpdatedNotificationSchema, async () => {
+    const res = await client.callTool({ name: "zalo_get_messages", arguments: { since: lastCursor } });
+    // xử lý tin mới, cập nhật lastCursor
+});
+await client.subscribeResource({ uri: "zalo://inbox" });
+```
 
 ---
 
@@ -295,7 +318,8 @@ File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo �
     "maxMessagesPerPoll": 20,
     "autoDigestThreshold": 50,
     "bufferMaxAge": "2h",
-    "bufferMaxSize": 500
+    "bufferMaxSize": 500,
+    "sessionIdleTimeout": "30m"
   },
   "media": {
     "downloadDir": null,
@@ -309,13 +333,14 @@ File nằm ở `~/.zalo-agent-cli/mcp-config.json`, giá trị bạn khai báo �
 | `watchThreads` | Pattern thread cần theo dõi: `dm:*`, `group:*`, `dm:<id>`, `group:<id>` |
 | `mode`, `limits.autoDigestThreshold` | Dành riêng cho tính năng sau, hiện chưa có tác dụng |
 | `triggerKeywords` | Từ khoá đánh dấu tin cần agent chú ý |
-| `notify.enabled` | Bật gửi thông báo vào nhóm Zalo khi có tin mới lúc agent offline |
+| `notify.enabled` | Bật gửi thông báo vào nhóm Zalo, chỉ gửi khi không có client nào đang subscribe `zalo://inbox` |
 | `notify.thread` | ID nhóm nhận thông báo |
 | `notify.on` | Loại thread kích hoạt thông báo (`dm`, `group`) |
 | `notify.cooldown` | Gộp thông báo trong khoảng này (`30s`, `5m`, `1h`) |
 | `limits.maxMessagesPerPoll` | Số tin mặc định mỗi lần `zalo_get_messages` |
 | `limits.bufferMaxAge` | Tuổi tối đa của tin trong buffer (`2h`) |
 | `limits.bufferMaxSize` | Số tin tối đa mỗi thread trong buffer |
+| `limits.sessionIdleTimeout` | Thời gian session HTTP không có request nào đang mở thì bị đóng (`30m`, mặc định) |
 | `media.downloadDir` | Thư mục lưu media (mặc định `~/.zalo-agent-cli/media/`) |
 | `media.autoOpen` | Mặc định mở media sau khi tải |
 
@@ -337,14 +362,14 @@ Claude Code / agent của bạn
 
 - **Auto-reconnect**: WebSocket tự kết nối lại; khi phiên bị đóng, server đăng nhập lại và mọi tool dùng phiên mới
 - **Cursor-based**: Client đọc tăng dần, không bỏ sót tin
-- **Stateless transport**: Mỗi request HTTP độc lập — state nằm ở buffer
+- **Session HTTP**: mỗi client có một session (`mcp-session-id`); tin nhắn vẫn nằm trong buffer chung nên session mất đi (kể cả bị đóng do idle) không làm mất tin
 
 ---
 
 ## Mẹo sử dụng
 
 - Dùng `watchThreads` để lọc noise — chỉ nhận thread quan trọng
-- Gọi `zalo_get_messages` định kỳ với `since` để polling tăng dần
+- Gọi `zalo_get_messages` định kỳ với `since` để polling tăng dần (nguồn sự thật); có thể subscribe `zalo://inbox` để được báo khi có tin mới
 - Dùng `zalo_mark_read` sau khi xử lý xong để buffer không đầy
 - Dùng `zalo_list_conversations` / `zalo_search_threads` để tìm `threadId` trước khi gửi tin
 - Trên VPS: luôn dùng `--auth` và đặt HTTPS phía trước

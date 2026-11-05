@@ -1,6 +1,7 @@
 /**
  * Sends notification to a configured Zalo group when DMs arrive
- * and no MCP agent is connected. Batches messages within a cooldown window.
+ * and no MCP client is subscribed to zalo://inbox (a subscriber gets a push, so the group message is redundant).
+ * Batches messages within a cooldown window.
  */
 
 import { parseDuration } from "./mcp-config.js";
@@ -37,8 +38,9 @@ export class ZaloNotifier {
      * @param {string|null} config.notify.thread - Group ID to send notifications to
      * @param {string[]} config.notify.on - Event types to notify on (e.g. ["dm"])
      * @param {string} config.notify.cooldown - Debounce window (e.g. "5m")
+     * @param {{ inboxSubscribers?: { count: () => number } }} [options] - Suppress notifications while any subscriber exists
      */
-    constructor(getApi, config) {
+    constructor(getApi, config, { inboxSubscribers = null } = {}) {
         this._getApi = getApi;
         this._enabled = config.notify?.enabled || false;
         this._notifyThread = config.notify?.thread || null;
@@ -46,12 +48,7 @@ export class ZaloNotifier {
         this._cooldownMs = parseDuration(config.notify?.cooldown || "5m");
         this._pending = []; // Messages queued during cooldown window
         this._timer = null;
-        this._agentConnected = false;
-    }
-
-    /** Mark agent as connected/disconnected — suppresses notifications when connected */
-    setAgentConnected(connected) {
-        this._agentConnected = connected;
+        this._inboxSubscribers = inboxSubscribers;
     }
 
     /**
@@ -74,7 +71,7 @@ export class ZaloNotifier {
      */
     _shouldNotify(message) {
         if (!this._enabled || !this._notifyThread) return false;
-        if (this._agentConnected) return false;
+        if (this._inboxSubscribers?.count() > 0) return false;
         return this._onTypes.has(message.threadType);
     }
 
@@ -83,9 +80,13 @@ export class ZaloNotifier {
         this._timer = null;
         if (this._pending.length === 0) return;
 
-        const count = this._pending.length;
-        const typeBreakdown = this._buildTypeBreakdown(this._pending);
-        const preview = this._pending
+        // Take the batch before awaiting so messages arriving during the send start the next batch
+        const batch = this._pending;
+        this._pending = [];
+
+        const count = batch.length;
+        const typeBreakdown = this._buildTypeBreakdown(batch);
+        const preview = batch
             .slice(0, 3) // Show at most 3 message previews
             .map((m) => {
                 const type = m.type || "text";
@@ -105,8 +106,6 @@ export class ZaloNotifier {
         } catch (err) {
             console.error("Notifier send failed:", err.message);
         }
-
-        this._pending = [];
     }
 
     /**

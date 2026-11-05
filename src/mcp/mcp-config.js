@@ -25,6 +25,7 @@ export function getDefaultConfig() {
             autoDigestThreshold: 50,
             bufferMaxAge: "2h",
             bufferMaxSize: 500,
+            sessionIdleTimeout: "30m",
         },
         media: {
             downloadDir: null, // default: ~/.zalo-agent-cli/media/

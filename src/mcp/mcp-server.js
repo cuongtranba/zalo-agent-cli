@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { registerTools } from "./mcp-tools.js";
+import { registerZaloServer } from "./mcp-setup.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
@@ -21,15 +21,16 @@ const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8
  * @param {import("./thread-filter.js").ThreadFilter} filter
  * @param {object} config - MCP config
  * @param {import("./thread-name-cache.js").ThreadNameCache} [nameCache] - Thread name cache
+ * @param {{ inboxSubscribers?: import("./mcp-resources.js").InboxSubscribers }} [options]
  * @returns {Promise<McpServer>}
  */
-export async function createMCPServer(getApi, buffer, filter, config, nameCache) {
+export async function createMCPServer(getApi, buffer, filter, config, nameCache, options = {}) {
     const server = new McpServer({
         name: "zalo-agent",
         version: pkg.version,
     });
 
-    registerTools(server, getApi, buffer, filter, config, nameCache);
+    registerZaloServer(server, getApi, buffer, filter, config, nameCache, options);
 
     const transport = new StdioServerTransport();
     await server.connect(transport);

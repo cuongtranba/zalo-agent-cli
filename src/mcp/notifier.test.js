@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ZaloNotifier } from "./notifier.js";
+import { InboxSubscribers } from "./mcp-resources.js";
 
 /** Create a spy api.sendMessage that records calls */
 function makeSpy() {
@@ -68,12 +69,6 @@ describe("ZaloNotifier constructor", () => {
         assert.ok(n._onTypes.has("dm"));
         assert.ok(n._onTypes.has("group"));
     });
-
-    it("agentConnected starts as false", () => {
-        const { api } = makeSpy();
-        const n = new ZaloNotifier(() => api, enabledConfig());
-        assert.equal(n._agentConnected, false);
-    });
 });
 
 describe("ZaloNotifier onMessage - disabled", () => {
@@ -88,28 +83,70 @@ describe("ZaloNotifier onMessage - disabled", () => {
     });
 });
 
-describe("ZaloNotifier onMessage - agent connected", () => {
-    it("does not notify when agent is connected", async () => {
+describe("ZaloNotifier onMessage - inbox subscribers", () => {
+    it("does not notify while a client is subscribed to the inbox", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(() => api, enabledConfig());
-        n.setAgentConnected(true);
+        const inboxSubscribers = new InboxSubscribers();
+        inboxSubscribers.add("session-1");
+        const n = new ZaloNotifier(() => api, enabledConfig(), { inboxSubscribers });
         n.onMessage(dmMsg());
         await wait(30);
         assert.equal(calls.length, 0);
         n.destroy();
     });
 
-    it("notifies again after agent disconnects", async () => {
+    it("notifies again once the last subscriber is gone", async () => {
         const { api, calls } = makeSpy();
-        const n = new ZaloNotifier(() => api, enabledConfig());
-        n.setAgentConnected(true);
+        const inboxSubscribers = new InboxSubscribers();
+        inboxSubscribers.add("session-1");
+        const n = new ZaloNotifier(() => api, enabledConfig(), { inboxSubscribers });
         n.onMessage(dmMsg("ignored"));
-        n.setAgentConnected(false);
+        inboxSubscribers.remove("session-1");
         n.onMessage(dmMsg("should notify"));
         await wait(30);
         assert.equal(calls.length, 1);
+        assert.ok(calls[0].text.includes("1 tin nhắn mới"));
         n.destroy();
     });
+});
+
+describe("ZaloNotifier flush", () => {
+    it(
+        "messages arriving while a notification is being sent are delivered in the next batch, not dropped",
+        { timeout: 2000 },
+        async () => {
+            const sent = [];
+            let releaseFirstSend;
+            let firstSendStarted;
+            let secondSendDone;
+            const started = new Promise((r) => (firstSendStarted = r));
+            const secondSent = new Promise((r) => (secondSendDone = r));
+            // The first send stays pending until the test releases it
+            const api = {
+                sendMessage: (text) => {
+                    sent.push(text);
+                    if (sent.length === 1) {
+                        firstSendStarted();
+                        return new Promise((release) => (releaseFirstSend = release));
+                    }
+                    secondSendDone();
+                    return Promise.resolve();
+                },
+            };
+            const n = new ZaloNotifier(() => api, enabledConfig());
+
+            n.onMessage(dmMsg("first"));
+            await started;
+            n.onMessage(dmMsg("during send"));
+            releaseFirstSend();
+            await secondSent;
+
+            assert.equal(sent.length, 2);
+            assert.ok(sent[0].includes("first") && !sent[0].includes("during send"));
+            assert.ok(sent[1].includes("during send"));
+            n.destroy();
+        },
+    );
 });
 
 describe("ZaloNotifier onMessage - type filtering", () => {

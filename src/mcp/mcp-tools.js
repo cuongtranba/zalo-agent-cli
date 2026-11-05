@@ -59,6 +59,25 @@ function toBatches(list, size) {
 }
 
 /**
+ * Read buffered messages and enrich them with thread names.
+ * Shared by the zalo_get_messages tool and the zalo://inbox resource so both return the same shape.
+ * @param {import("./message-buffer.js").MessageBuffer} buffer
+ * @param {import("./thread-name-cache.js").ThreadNameCache} [nameCache]
+ * @param {{ threadId?: string, since?: number, limit: number }} query
+ * @returns {{ messages: Array, cursor: number, hasMore: boolean }}
+ */
+export function readBufferedMessages(buffer, nameCache, { threadId, since = 0, limit }) {
+    const result = buffer.read(threadId, since, limit);
+    if (nameCache) {
+        for (const msg of result.messages) {
+            const info = nameCache.get(msg.threadId);
+            if (info) msg.threadName = info.name;
+        }
+    }
+    return result;
+}
+
+/**
  * Register all Zalo MCP tools on the server.
  * @param {import("@modelcontextprotocol/sdk/server/mcp.js").McpServer} server
  * @param {() => object} getApi - Returns the current zca-js API instance (changes after re-login, so call per request)
@@ -89,15 +108,7 @@ export function registerTools(server, getApi, buffer, filter, config, nameCache)
         },
         async ({ threadId, since, limit }) => {
             try {
-                const result = buffer.read(threadId, since, limit);
-                // Enrich messages with thread name from cache
-                if (nameCache) {
-                    for (const msg of result.messages) {
-                        const info = nameCache.get(msg.threadId);
-                        if (info) msg.threadName = info.name;
-                    }
-                }
-                return ok(result);
+                return ok(readBufferedMessages(buffer, nameCache, { threadId, since, limit }));
             } catch (e) {
                 console.error("[mcp-tools] zalo_get_messages error:", e.message);
                 return err(e.message);

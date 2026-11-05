@@ -6,14 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Push notifications through the standard MCP resource subscription: subscribe to `zalo://inbox` and receive `notifications/resources/updated` when a message is buffered (stdio and HTTP). Notifications are best-effort; cursor polling stays the source of truth.
 - MCP tools: `zalo_send_attachment` (server paths or http(s) URLs, 25 MB cap), `zalo_react`, `zalo_list_conversations`, `zalo_get_group_members`, `zalo_get_user_info`.
 - `zalo_send_message` accepts `replyToMessageId` (quote a buffered message) and `mentions`.
 - Buffered MCP messages expose `cliMsgId`, `ts`, and `replyTo` (filled from the quoted message).
 - MCP guide: "Tích hợp vào agent qua HTTP" section, full tool reference for all 12 tools, corrected config keys and `/mcp` URL.
 - Tests for MCP tools and the HTTP transport.
 
+### Changed
+
+- HTTP MCP transport is now session-based (`mcp-session-id`, `GET /mcp` SSE stream) instead of stateless, which is required for server-to-client notifications. Standard MCP clients handle this automatically.
+
 ### Fixed
 
+- Idle HTTP MCP sessions now expire (`limits.sessionIdleTimeout`, default 30m) instead of accumulating forever when a client disappears without closing its session. `/health` reports the open `sessions` count.
+- The Zalo-group notifier now actually suppresses notifications while an MCP client is subscribed to `zalo://inbox` (previously it never knew about connected agents and always sent).
+- The notifier no longer drops messages that arrive while a notification is being sent; they go out in the next batch.
 - `mcp start` no longer crash-loops under a process manager when the saved Zalo session is expired or missing: it prints the reason once and exits with code 78 (start pm2 with `--stop-exit-codes 78`). Transient network failures still exit with code 1 so the process manager retries.
 - MCP tools, HTTP transport and notifier used the Zalo session captured at startup, so every call failed after an automatic re-login. They now resolve the current session per call.
 - `mcp start` no longer prints the auto-login line or the update notice to stdout (the stdio protocol channel).
