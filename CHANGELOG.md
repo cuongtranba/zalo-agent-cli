@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file.
 - Bun-only runtime: the CLI now runs on [Bun](https://bun.sh) >= 1.4.2 and Node.js is no longer supported. Install with `bun add -g zalo-agent-cli`; `npm install -g` still installs the package, but the `zalo-agent` command needs `bun` on `PATH`. Process managers must run it with Bun (for pm2: `--interpreter bun`; keep `--stop-exit-codes 78` for `mcp start`).
 - The package now ships TypeScript sources (`src/**/*.ts`, `bin` points at `src/index.ts`) instead of JavaScript.
 
+### Removed
+
+- ClawHub auto-publish workflow (`.github/workflows/clawhub-publish.yml`) and the `clawhub install zalo-agent` instructions. The `skill/` folder remains usable locally by agents.
+
 ### Added
 
 - Standalone release binaries (no runtime needed) for linux-x64, linux-arm64, darwin-x64, darwin-arm64 and windows-x64, attached to every GitHub release with `SHA256SUMS`.
