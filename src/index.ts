@@ -63,11 +63,11 @@ program
 // Self-update command
 program
     .command("update")
-    .description("Update zalo-agent-cli to the latest version")
+    .description("Update zalo-mcp to the latest version")
     .action(async () => {
         const ok = await selfUpdate();
         if (ok) success(`Updated to latest version`);
-        else error("Update failed. Try manually: bun add -g zalo-agent-cli@latest");
+        else error("Update failed. Try manually: bun add -g zalo-mcp@latest");
     });
 
 // Register all command groups

@@ -8,13 +8,15 @@
   <img src="assets/demo.gif" alt="zalo-agent-cli demo" />
 </p>
 
-[![npm version](https://img.shields.io/npm/v/zalo-agent-cli.svg)](https://www.npmjs.com/package/zalo-agent-cli)
-[![npm downloads](https://img.shields.io/npm/dm/zalo-agent-cli.svg)](https://www.npmjs.com/package/zalo-agent-cli)
-[![npm total downloads](https://img.shields.io/npm/dt/zalo-agent-cli.svg)](https://www.npmjs.com/package/zalo-agent-cli)
-[![license](https://img.shields.io/npm/l/zalo-agent-cli.svg)](https://github.com/PhucMPham/zalo-agent-cli/blob/main/LICENSE)
+[![npm version](https://img.shields.io/npm/v/zalo-mcp.svg)](https://www.npmjs.com/package/zalo-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/zalo-mcp.svg)](https://www.npmjs.com/package/zalo-mcp)
+[![npm total downloads](https://img.shields.io/npm/dt/zalo-mcp.svg)](https://www.npmjs.com/package/zalo-mcp)
+[![license](https://img.shields.io/npm/l/zalo-mcp.svg)](https://github.com/cuongtranba/zalo-agent-cli/blob/main/LICENSE)
 
 Công cụ CLI tự động hóa Zalo — đa tài khoản, proxy, chuyển khoản ngân hàng, thanh toán QR.
 Xây dựng trên [zca-js](https://github.com/RFS-ADRENO/zca-js).
+
+> Fork của [PhucMPham/zalo-agent-cli](https://github.com/PhucMPham/zalo-agent-cli), phát hành trên npm với tên `zalo-mcp`.
 
 **[Tiếng Việt](#bắt-đầu-nhanh)** | **[English](#english)**
 
@@ -59,12 +61,12 @@ Xây dựng trên [zca-js](https://github.com/RFS-ADRENO/zca-js).
 Yêu cầu: [Bun](https://bun.sh) >= 1.4.2 (không còn hỗ trợ Node.js).
 
 ```bash
-bun add -g zalo-agent-cli
+bun add -g zalo-mcp
 ```
 
-Hoặc tải file chạy độc lập (không cần cài Bun) từ [trang Releases](https://github.com/PhucMPham/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64`, `zalo-agent-windows-x64.exe` (kèm `SHA256SUMS`).
+Hoặc tải file chạy độc lập (không cần cài Bun) từ [trang Releases](https://github.com/cuongtranba/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64`, `zalo-agent-windows-x64.exe` (kèm `SHA256SUMS`).
 
-> `npm install -g zalo-agent-cli` vẫn cài được gói, nhưng lệnh `zalo-agent` chỉ chạy khi `bun` có trong `PATH`.
+> `npm install -g zalo-mcp` vẫn cài được gói, nhưng lệnh `zalo-agent` chỉ chạy khi `bun` có trong `PATH`.
 
 ## Bắt đầu nhanh
 
@@ -157,6 +159,8 @@ Nếu tool này giúp bạn tiết kiệm thời gian, hãy mua cho chúng tôi 
 
 CLI tool for Zalo automation — multi-account, proxy support, bank transfers, QR payments.
 
+> Forked from [PhucMPham/zalo-agent-cli](https://github.com/PhucMPham/zalo-agent-cli), published on npm as `zalo-mcp`.
+
 > [!TIP]
 > **AI Agent Skill** — Use with OpenClaw, Claude Code, or any SKILL.md-compatible agent:
 > ```bash
@@ -193,12 +197,12 @@ CLI tool for Zalo automation — multi-account, proxy support, bank transfers, Q
 Requires [Bun](https://bun.sh) >= 1.4.2 (Node.js is no longer supported).
 
 ```bash
-bun add -g zalo-agent-cli
+bun add -g zalo-mcp
 ```
 
-Or download a standalone binary (no Bun needed) from the [Releases page](https://github.com/PhucMPham/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64` or `zalo-agent-windows-x64.exe`, with a `SHA256SUMS` file.
+Or download a standalone binary (no Bun needed) from the [Releases page](https://github.com/cuongtranba/zalo-agent-cli/releases/latest): `zalo-agent-linux-x64`, `zalo-agent-linux-arm64`, `zalo-agent-darwin-x64`, `zalo-agent-darwin-arm64` or `zalo-agent-windows-x64.exe`, with a `SHA256SUMS` file.
 
-> `npm install -g zalo-agent-cli` still installs the package, but the `zalo-agent` command only runs when `bun` is on your `PATH`.
+> `npm install -g zalo-mcp` still installs the package, but the `zalo-agent` command only runs when `bun` is on your `PATH`.
 
 ### Quick Start
 
@@ -244,7 +248,7 @@ If this tool saves you time, consider buying us a coffee!
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=PhucMPham/zalo-agent-cli&type=Date)](https://star-history.com/#PhucMPham/zalo-agent-cli&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=cuongtranba/zalo-agent-cli&type=Date)](https://star-history.com/#cuongtranba/zalo-agent-cli&Date)
 
 ## License
 

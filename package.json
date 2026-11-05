@@ -1,5 +1,5 @@
 {
-  "name": "zalo-agent-cli",
+  "name": "zalo-mcp",
   "version": "1.6.2",
   "description": "CLI tool for Zalo automation — multi-account, proxy, bank transfers, QR payments, Official Account API v3.0",
   "type": "module",
@@ -41,7 +41,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/PhucMPham/zalo-agent-cli"
+    "url": "git+https://github.com/cuongtranba/zalo-agent-cli.git"
+  },
+  "homepage": "https://github.com/cuongtranba/zalo-agent-cli#readme",
+  "bugs": {
+    "url": "https://github.com/cuongtranba/zalo-agent-cli/issues"
   },
   "license": "MIT",
   "engines": {
