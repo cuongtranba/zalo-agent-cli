@@ -6,7 +6,7 @@ Thanks for your interest in contributing! This guide will help you get started.
 
 ```bash
 # Clone the repo
-git clone https://github.com/ChickenAI/zalo-agent-cli.git
+git clone https://github.com/cuongtranba/zalo-agent-cli.git
 cd zalo-agent-cli
 
 # Install dependencies (Bun >= 1.4.2; the repo pins the version in .bun-version)

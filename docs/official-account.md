@@ -172,7 +172,7 @@ ngrok http 3000
 
 ```bash
 # Install trên VPS
-bun add -g zalo-agent-cli
+bun add -g zalo-mcp
 
 # Login từ VPS
 zalo-agent oa login --app-id <ID> --secret <KEY> --callback-host https://your-vps.com

@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "zalo-agent-cli",
+      "name": "zalo-mcp",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.27.1",
         "chalk": "^5.3.0",

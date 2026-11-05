@@ -1,7 +1,7 @@
 ---
 name: zalo-agent
 description: "Automate Zalo messaging, Official Account (OA), and MCP server integration via zalo-agent-cli. Triggers: 'zalo', 'send zalo', 'zalo OA', 'official account', 'bank card', 'QR transfer', 'VietQR', 'listen zalo', 'zalo webhook', 'zalo group', 'zalo friend', 'zalo MCP', 'MCP server'."
-homepage: https://github.com/PhucMPham/zalo-agent-cli
+homepage: https://github.com/cuongtranba/zalo-agent-cli
 metadata: {"openclaw": {"requires": {"bins": ["zalo-agent"]}, "os": ["darwin", "linux"]}}
 ---
 
@@ -15,7 +15,7 @@ Does NOT handle: Zalo Mini App, Zalo Ads, ZNS templates, non-Zalo platforms.
 
 ## Prerequisites
 - **Requires**: `zalo-agent` CLI pre-installed by user (`zalo-agent --version` to verify)
-- See [installation guide](https://github.com/PhucMPham/zalo-agent-cli) for setup
+- See [installation guide](https://github.com/cuongtranba/zalo-agent-cli) for setup
 - Update: `zalo-agent update`
 
 ## Core Workflow

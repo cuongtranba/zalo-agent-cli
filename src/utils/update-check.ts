@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { warning } from "./output.ts";
 
-const LATEST_URL = "https://registry.npmjs.org/zalo-agent-cli/latest";
+const LATEST_URL = "https://registry.npmjs.org/zalo-mcp/latest";
 
 /**
  * Check npm registry for latest version, warn if outdated.
@@ -30,12 +30,12 @@ export async function checkForUpdates(currentVersion: string, jsonMode: boolean 
 }
 
 /**
- * Self-update by running `bun add -g zalo-agent-cli@latest`.
+ * Self-update by running `bun add -g zalo-mcp@latest`.
  * @returns success
  */
 export function selfUpdate(): Promise<boolean> {
     return new Promise((resolve) => {
-        const child = spawn("bun", ["add", "-g", "zalo-agent-cli@latest"], { stdio: "inherit", timeout: 60000 });
+        const child = spawn("bun", ["add", "-g", "zalo-mcp@latest"], { stdio: "inherit", timeout: 60000 });
         child.on("error", () => resolve(false));
         child.on("close", (code) => resolve(code === 0));
     });
