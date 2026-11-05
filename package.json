@@ -13,13 +13,15 @@
     "DISCLAIMER.md"
   ],
   "scripts": {
-    "test": "node --test src/*.test.js src/**/*.test.js",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
-    "release": "npm version patch -m 'release: v%s' && git push origin main --tags",
-    "prepublishOnly": "npm run lint && npm test"
+    "build:bin": "bun build ./src/index.ts --compile --outfile dist/zalo-agent",
+    "release": "bun pm version patch -m 'release: v%s' && git push origin main --tags",
+    "prepublishOnly": "bun run typecheck && bun test"
   },
   "keywords": [
     "zalo",
@@ -40,7 +42,7 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "bun": ">=1.4.2"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -56,5 +58,6 @@
   "devDependencies": {
     "eslint": "^10.0.3",
     "prettier": "^3.8.1"
-  }
+  },
+  "packageManager": "bun@1.4.2"
 }
