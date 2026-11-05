@@ -9,16 +9,11 @@
 
 import express from "express";
 import { randomUUID, timingSafeEqual } from "crypto";
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { parseDuration } from "./mcp-config.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
+import pkg from "../../package.json" with { type: "json" };
 
 /** Hosts that are safe to serve without an auth token */
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);

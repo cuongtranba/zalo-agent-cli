@@ -3,15 +3,10 @@
  * Creates and connects the McpServer instance for Claude Code integration.
  */
 
-import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerZaloServer } from "./mcp-setup.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf8"));
+import pkg from "../../package.json" with { type: "json" };
 
 /**
  * Create and start MCP server with stdio transport.

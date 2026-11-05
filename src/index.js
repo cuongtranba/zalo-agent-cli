@@ -1,18 +1,14 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * zalo-agent-cli — CLI for Zalo automation with multi-account + proxy support.
  * Entry point: registers all command groups via Commander.js.
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import { Command } from "commander";
+import pkg from "../package.json" with { type: "json" };
 import { registerLoginCommands } from "./commands/login.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
 import { registerMsgCommands } from "./commands/msg.js";
 import { registerFriendCommands } from "./commands/friend.js";
 import { registerGroupCommands } from "./commands/group.js";
@@ -60,7 +56,7 @@ program
         }
         // Non-blocking update check (skip for update command itself and mcp, whose stdout is the protocol channel)
         if (cmdName !== "update" && cmdName !== "mcp") {
-            checkForUpdates(pkg.version, program.opts().json);
+            await checkForUpdates(pkg.version, program.opts().json);
         }
     });
 
@@ -68,10 +64,10 @@ program
 program
     .command("update")
     .description("Update zalo-agent-cli to the latest version")
-    .action(() => {
-        const ok = selfUpdate();
+    .action(async () => {
+        const ok = await selfUpdate();
         if (ok) success(`Updated to latest version`);
-        else error("Update failed. Try manually: npm install -g zalo-agent-cli@latest");
+        else error("Update failed. Try manually: bun add -g zalo-agent-cli@latest");
     });
 
 // Register all command groups

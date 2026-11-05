@@ -1,25 +1,25 @@
 /**
  * Non-blocking update check — warns user if a newer version is available on npm.
- * Runs silently in background; never blocks CLI execution.
+ * Never throws; network problems are silent.
  */
 
-import { execSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { warning } from "./output.js";
+
+const LATEST_URL = "https://registry.npmjs.org/zalo-agent-cli/latest";
 
 /**
  * Check npm registry for latest version, warn if outdated.
  * @param {string} currentVersion - Current package version
  * @param {boolean} jsonMode - Suppress output in JSON mode
  */
-export function checkForUpdates(currentVersion, jsonMode) {
+export async function checkForUpdates(currentVersion, jsonMode) {
     if (jsonMode) return;
 
     try {
-        const latest = execSync("npm view zalo-agent-cli version", {
-            encoding: "utf8",
-            timeout: 5000,
-            stdio: ["pipe", "pipe", "pipe"],
-        }).trim();
+        const res = await fetch(LATEST_URL, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) return;
+        const { version: latest } = await res.json();
 
         if (latest && latest !== currentVersion) {
             warning(`Update available: ${currentVersion} → ${latest}. Run: zalo-agent update`);
@@ -30,18 +30,13 @@ export function checkForUpdates(currentVersion, jsonMode) {
 }
 
 /**
- * Self-update by running npm install -g.
- * @returns {boolean} success
+ * Self-update by running `bun add -g zalo-agent-cli@latest`.
+ * @returns {Promise<boolean>} success
  */
 export function selfUpdate() {
-    try {
-        execSync("npm install -g zalo-agent-cli@latest", {
-            encoding: "utf8",
-            stdio: "inherit",
-            timeout: 60000,
-        });
-        return true;
-    } catch {
-        return false;
-    }
+    return new Promise((resolve) => {
+        const child = spawn("bun", ["add", "-g", "zalo-agent-cli@latest"], { stdio: "inherit", timeout: 60000 });
+        child.on("error", () => resolve(false));
+        child.on("close", (code) => resolve(code === 0));
+    });
 }

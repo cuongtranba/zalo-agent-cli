@@ -5,7 +5,6 @@
 import { mkdtempSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import nodefetch from "node-fetch";
 
 /** Bank name aliases (lowercase, no spaces) → BIN codes. */
 export const BANK_NAME_TO_BIN = {
@@ -219,9 +218,9 @@ export async function generateQrTransferImage(bin, accountNumber, amount = null,
     const outPath = join(tmpDir, "qr.png");
 
     try {
-        const resp = await nodefetch(url, {
+        const resp = await fetch(url, {
             headers: { "User-Agent": "Mozilla/5.0" },
-            timeout: 15000,
+            signal: AbortSignal.timeout(15000),
         });
         if (!resp.ok) return null;
         const buffer = Buffer.from(await resp.arrayBuffer());
