@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- `threadType` on `zalo_send_message`, `zalo_send_attachment`, `zalo_react` and `zalo_get_history` now also accepts `"dm"` / `"group"` (the values buffered messages carry) besides `0` / `1`. Numeric values and defaults are unchanged.
 - The npm package is renamed to `zalo-mcp` (the `zalo-agent` command is unchanged). Install with `bun add -g zalo-mcp`; `zalo-agent update` and the update check now use the `zalo-mcp` package. Config and credentials stay in `~/.zalo-agent-cli/`.
 
 ### Removed
@@ -19,6 +20,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- `zalo_send_message` and `zalo_send_attachment` results include `sentAt` (epoch ms when the send resolved) next to `messageId`.
 - Standalone release binaries (no runtime needed) for linux-x64, linux-arm64, darwin-x64, darwin-arm64 and windows-x64, attached to every GitHub release with `SHA256SUMS`.
 - `bun run check` runs typecheck, lint, format check and tests in sequence.
 - Push notifications through the standard MCP resource subscription: subscribe to `zalo://inbox` and receive `notifications/resources/updated` when a message is buffered (stdio and HTTP). Notifications are best-effort; cursor polling stays the source of truth.
