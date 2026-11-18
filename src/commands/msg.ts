@@ -115,6 +115,21 @@ interface HistoryMessage {
     type: string;
 }
 
+/** Map a raw zca-js message (listener event or group history) to the HistoryMessage shape. */
+function toHistoryMessage(msg: Pick<Message, "threadId" | "data">): HistoryMessage {
+    const content = msg.data?.content;
+    const isText = typeof content === "string";
+    return {
+        msgId: msg.data?.msgId,
+        threadId: msg.threadId,
+        senderId: msg.data?.uidFrom || null,
+        senderName: msg.data?.dName || null,
+        text: isText ? content : extractMessageText(content, msg.data?.msgType),
+        timestamp: msg.data?.ts ? Number(msg.data.ts) : null,
+        type: isText ? "text" : msg.data?.msgType || "attachment",
+    };
+}
+
 export function registerMsgCommands(program: Command): void {
     const msg = program.command("msg").description("Send and manage messages");
 
@@ -549,10 +564,10 @@ export function registerMsgCommands(program: Command): void {
         });
 
     msg.command("history <threadId>")
-        .description("Fetch message history from a DM or group conversation via WebSocket")
+        .description("Fetch message history from a DM or group conversation")
         .option("-t, --type <n>", "Thread type: 0=User(DM), 1=Group", "0")
-        .option("-n, --limit <n>", "Max messages to fetch (fetches in pages until limit)", "50")
-        .option("--timeout <ms>", "Timeout in milliseconds waiting for response", "15000")
+        .option("-n, --limit <n>", "Max messages to fetch", "50")
+        .option("--timeout <ms>", "Timeout in milliseconds waiting for a DM page", "15000")
         .action(async (threadId: string, opts: { type: string; limit: string; timeout: string }) => {
             const jsonMode = program.opts().json;
             const threadType = Number(opts.type);
@@ -568,76 +583,86 @@ export function registerMsgCommands(program: Command): void {
 
                 const api = getApi();
                 const allMessages: HistoryMessage[] = [];
-                let lastMsgId: string | null = null;
-                let done = false;
 
-                // Start listener (required for WebSocket requestOldMessages)
-                await new Promise<void>((resolveConnected, reject) => {
-                    const timer = setTimeout(() => reject(new Error("Listener connection timeout")), 10000);
-                    api.listener.on("connected", () => {
-                        clearTimeout(timer);
-                        resolveConnected();
-                    });
-                    api.listener.on("error", (err) => {
-                        clearTimeout(timer);
-                        reject(err);
-                    });
-                    api.listener.start({ retryOnClose: false });
-                });
+                if (threadType === 1) {
+                    // Groups: Zalo cloud message service (paginated, thread-scoped), no listener needed.
+                    let cursor: string | undefined;
+                    let isOld = false;
+                    const maxPages = Math.ceil(limit / 50) + 1;
+                    for (let page = 0; page < maxPages && allMessages.length < limit; page++) {
+                        let res: Awaited<ReturnType<typeof api.getCloudMessage>>;
+                        try {
+                            res = await api.getCloudMessage(threadId, cursor, cursor ? { isOld } : undefined);
+                        } catch (e) {
+                            // code -69: the server has nothing more to load
+                            if (typeof e === "object" && e !== null && "code" in e && e.code === -69) break;
+                            throw e;
+                        }
+                        const batch = res?.groupMsgs ?? [];
+                        for (const m of batch) allMessages.push(toHistoryMessage(m));
+                        const next = res?.lastMsgId ?? null;
+                        if (!res?.hasMore) break;
+                        if (next === null || next === (cursor ?? null)) break;
+                        cursor = next;
+                        isOld = Boolean(res?.isOld);
+                    }
+                    allMessages.length = Math.min(allMessages.length, limit);
+                } else {
+                    // DMs: zca-js has no thread-scoped REST history, so page the WebSocket listener and filter.
+                    let lastMsgId: string | null = null;
+                    let done = false;
 
-                // Fetch pages until limit reached or no more messages
-                while (!done && allMessages.length < limit) {
-                    const pageMessages = await new Promise<Message[]>((resolvePage) => {
-                        const handler = (messages: Message[]) => {
+                    await new Promise<void>((resolveConnected, reject) => {
+                        const timer = setTimeout(() => reject(new Error("Listener connection timeout")), 10000);
+                        api.listener.on("connected", () => {
                             clearTimeout(timer);
-                            api.listener.removeListener("old_messages", handler);
-                            resolvePage(messages);
-                        };
-                        const timer = setTimeout(() => {
-                            api.listener.removeListener("old_messages", handler);
-                            resolvePage([]);
-                        }, timeout);
-
-                        api.listener.on("old_messages", handler);
-                        api.listener.requestOldMessages(threadType, lastMsgId);
+                            resolveConnected();
+                        });
+                        api.listener.on("error", (err) => {
+                            clearTimeout(timer);
+                            reject(err);
+                        });
+                        api.listener.start({ retryOnClose: false });
                     });
 
-                    if (!pageMessages || pageMessages.length === 0) {
-                        done = true;
-                        break;
-                    }
+                    const maxPages = Math.ceil(limit / 20);
+                    for (let page = 0; !done && allMessages.length < limit && page < maxPages; page++) {
+                        const pageMessages = await new Promise<Message[]>((resolvePage) => {
+                            const handler = (messages: Message[]) => {
+                                clearTimeout(timer);
+                                api.listener.removeListener("old_messages", handler);
+                                resolvePage(messages);
+                            };
+                            const timer = setTimeout(() => {
+                                api.listener.removeListener("old_messages", handler);
+                                resolvePage([]);
+                            }, timeout);
 
-                    for (const historyMsg of pageMessages) {
-                        if (allMessages.length >= limit) break;
-                        // API returns messages globally — filter to requested thread
-                        const msgThread = String(historyMsg.threadId || "");
-                        const msgSender = String(historyMsg.data?.uidFrom || "");
-                        const target = String(threadId);
-                        if (msgThread !== target && msgSender !== target) continue;
-                        allMessages.push({
-                            msgId: historyMsg.data?.msgId,
-                            threadId: historyMsg.threadId,
-                            senderId: historyMsg.data?.uidFrom || null,
-                            senderName: historyMsg.data?.dName || null,
-                            text:
-                                typeof historyMsg.data?.content === "string"
-                                    ? historyMsg.data.content
-                                    : extractMessageText(historyMsg.data?.content, historyMsg.data?.msgType),
-                            timestamp: historyMsg.data?.ts ? Number(historyMsg.data.ts) : null,
-                            type:
-                                typeof historyMsg.data?.content === "string"
-                                    ? "text"
-                                    : historyMsg.data?.msgType || "attachment",
+                            api.listener.on("old_messages", handler);
+                            api.listener.requestOldMessages(threadType, lastMsgId);
                         });
+
+                        if (!pageMessages || pageMessages.length === 0) {
+                            done = true;
+                            break;
+                        }
+
+                        for (const historyMsg of pageMessages) {
+                            if (allMessages.length >= limit) break;
+                            // API returns messages globally — filter to requested thread
+                            const msgThread = String(historyMsg.threadId || "");
+                            const msgSender = String(historyMsg.data?.uidFrom || "");
+                            if (msgThread !== String(threadId) && msgSender !== String(threadId)) continue;
+                            allMessages.push(toHistoryMessage(historyMsg));
+                        }
+
+                        const lastMsg = pageMessages[pageMessages.length - 1];
+                        const nextId = lastMsg?.data?.actionId || lastMsg?.data?.msgId;
+                        if (!nextId || nextId === lastMsgId) done = true;
+                        lastMsgId = nextId;
                     }
 
-                    // Use last message's actionId for pagination
-                    const lastMsg = pageMessages[pageMessages.length - 1];
-                    const nextId = lastMsg?.data?.actionId || lastMsg?.data?.msgId;
-                    if (!nextId || nextId === lastMsgId) {
-                        done = true;
-                    }
-                    lastMsgId = nextId;
+                    api.listener.stop();
                 }
 
                 // Sort by timestamp (oldest first)
@@ -646,7 +671,7 @@ export function registerMsgCommands(program: Command): void {
                 output(
                     {
                         threadId,
-                        threadType: threadType === 0 ? "dm" : "group",
+                        threadType: threadType === 1 ? "group" : "dm",
                         count: allMessages.length,
                         messages: allMessages,
                     },
@@ -660,13 +685,9 @@ export function registerMsgCommands(program: Command): void {
                         }
                     },
                 );
-
-                // Clean up listener
-                api.listener.stop();
                 process.exit(0);
             } catch (e) {
                 try {
-                    // `api` is scoped to the try block above, so fetch it again
                     getApi().listener.stop();
                 } catch {}
                 error(`History fetch failed: ${errorMessage(e)}`);

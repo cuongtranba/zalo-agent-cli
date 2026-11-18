@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `zalo_search_messages` MCP tool: query messages by keyword (case- and accent-insensitive, Vietnamese-aware), sender, and time range across the live buffer and a group's history.
+
+### Fixed
+
+- `zalo_get_history` and `msg history` now return a group's messages reliably. Zalo removed the old `/api/group/history` endpoint, so the previous listener-based paging (and zca-js `getGroupChatHistory`) returned empty/partial results for low-traffic groups or failed outright. Group history now uses Zalo's cloud message service (`getCloudMessage`), which is thread-scoped and paginated (`lastMsgId`/`hasMore`). DM history keeps the listener-based best-effort path and no longer opens a second listener for groups.
+
+### Changed
+
+- Upgraded `zca-js` to `^2.3.0` for the `getCloudMessage` group-history API (the `/api/group/history` endpoint it replaces was removed by Zalo).
+
 ### BREAKING
 
 - Bun-only runtime: the CLI now runs on [Bun](https://bun.sh) >= 1.4.2 and Node.js is no longer supported. Install with `bun add -g zalo-agent-cli`; `npm install -g` still installs the package, but the `zalo-agent` command needs `bun` on `PATH`. Process managers must run it with Bun (for pm2: `--interpreter bun`; keep `--stop-exit-codes 78` for `mcp start`).

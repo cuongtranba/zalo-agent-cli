@@ -1,6 +1,6 @@
 # Zalo MCP Server Guide
 
-The Model Context Protocol (MCP) lets Claude Code and other MCP clients/agents work with Zalo directly through 12 tools: read and send messages, send files, add reactions, and look up conversations, groups, and users.
+The Model Context Protocol (MCP) lets Claude Code and other MCP clients/agents work with Zalo directly through 13 tools: read, search and send messages, send files, add reactions, and look up conversations, groups, and users.
 
 ---
 
@@ -159,16 +159,36 @@ Result: `{ messages, cursor, hasMore }`. Each message has `id`, `cliMsgId`, `thr
 ---
 
 ### `zalo_get_history`
-Fetch older messages from the Zalo server (up to ~2 weeks), unlike the buffer used by `zalo_get_messages`.
+Fetch older messages from the Zalo server, unlike the buffer used by `zalo_get_messages`.
+
+- **Groups** use Zalo's cloud message service (`getCloudMessage`), paged thread-scoped: it reliably returns the latest `limit` messages for that group — even low-traffic groups — and needs no extra listener. Raise `limit` to reach further back; `hasMore` signals that older messages exist.
+- **DMs** have no thread-scoped server endpoint in the underlying library, so history is paged from the live listener and filtered to the thread (best-effort; a quiet DM may need a larger `limit`). This reuses the running `mcp start` listener.
 
 | Name | Type | Description |
 |------|------|-------------|
 | `threadId` | string | Thread to fetch |
 | `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | 0 / `"dm"` = DM (default), 1 / `"group"` = group |
 | `limit` | number 1–200 (default 50) | Max messages |
-| `lastMsgId` | string (optional) | Pagination cursor from the previous call |
+| `lastMsgId` | string (optional) | DM pagination cursor from the previous call |
 
-Result: `{ threadId, threadType, count, messages, cursor, hasMore }`.
+Result: `{ threadId, threadType, count, messages, cursor, hasMore }` (messages oldest first).
+
+---
+
+### `zalo_search_messages`
+Query messages by keyword, sender, and time range. Searches the live buffer and, when a group `threadId` is given, also fetches that group's history. Keyword matching is case- and accent-insensitive (Vietnamese-aware), so `duyet` matches `duyệt`.
+
+| Name | Type | Description |
+|------|------|-------------|
+| `query` | string (optional) | Keyword to match in message text; omit to filter only by sender/time |
+| `threadId` | string (optional) | Restrict to one thread. For groups, history is fetched; omit to search the buffer |
+| `threadType` | `0` \| `1` \| `"dm"` \| `"group"` | Only used when a group `threadId` is given |
+| `senderId` | string (optional) | Only messages from this user ID |
+| `from` | number (optional) | Only messages at/after this Unix ms timestamp |
+| `to` | number (optional) | Only messages at/before this Unix ms timestamp |
+| `limit` | number 1–200 (default 50) | Max results (newest first) |
+
+Result: `{ count, messages }`.
 
 ---
 

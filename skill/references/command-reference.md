@@ -35,6 +35,7 @@
 | `delete <msgId> <id> [-t]` | Delete (self only) |
 | `undo <msgId> <id> -c <cliMsgId> [-t]` | Recall both sides |
 | `forward <msgId> <id> [-t]` | Forward message |
+| `history <id> [-t 0\|1] [-n limit] [--timeout ms]` | Fetch conversation history. Groups: reliable thread-scoped fetch; DMs: best-effort via the live listener |
 
 ## Friends — `friend`
 | Command | Description |

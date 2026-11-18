@@ -27,6 +27,7 @@ const TOOL_NAMES = [
     "zalo_get_user_info",
     "zalo_mark_read",
     "zalo_get_history",
+    "zalo_search_messages",
     "zalo_view_media",
 ];
 
