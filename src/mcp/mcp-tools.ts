@@ -1,8 +1,8 @@
 /**
  * MCP tool registrations for Zalo message access and sending.
- * Registers 12 tools: zalo_get_messages, zalo_get_history, zalo_send_message, zalo_send_attachment, zalo_react,
- * zalo_list_threads, zalo_search_threads, zalo_list_conversations, zalo_get_group_members, zalo_get_user_info,
- * zalo_mark_read, zalo_view_media.
+ * Registers 13 tools: zalo_get_messages, zalo_get_history, zalo_search_messages, zalo_send_message,
+ * zalo_send_attachment, zalo_react, zalo_list_threads, zalo_search_threads, zalo_list_conversations,
+ * zalo_get_group_members, zalo_get_user_info, zalo_mark_read, zalo_view_media.
  */
 
 import { rm } from "fs/promises";
@@ -37,6 +37,7 @@ export type ToolsApi = Pick<
     | "getGroupInfo"
     | "getGroupMembersInfo"
     | "getUserInfo"
+    | "getCloudMessage"
 > & { listener: HistoryListener };
 
 /** Thread type constants matching zca-js ThreadType enum */
@@ -94,7 +95,7 @@ function toBatches<T>(list: T[], size: number): T[][] {
     return batches;
 }
 
-/** One message returned by zalo_get_history. */
+/** One message returned by zalo_get_history and zalo_search_messages. */
 interface HistoryMessage {
     msgId: string | undefined;
     threadId: string;
@@ -104,6 +105,127 @@ interface HistoryMessage {
     timestamp: number | null;
     type: string;
     threadName?: string;
+}
+
+/** A zca-js message as returned by the listener or getCloudMessage: a wrapper with .threadId and .data. */
+type RawMessage = Pick<Message, "threadId" | "data">;
+
+/** Map a raw zca-js message (listener event or group history) to the HistoryMessage shape. */
+function toHistoryMessage(msg: RawMessage): HistoryMessage {
+    const rawContent = msg.data?.content;
+    const isText = typeof rawContent === "string";
+    return {
+        msgId: msg.data?.msgId,
+        threadId: msg.threadId,
+        senderId: msg.data?.uidFrom || null,
+        senderName: msg.data?.dName || null,
+        text: isText ? rawContent : extractMessageText(rawContent, msg.data?.msgType),
+        timestamp: msg.data?.ts ? Number(msg.data.ts) : null,
+        type: isText ? "text" : msg.data?.msgType || "attachment",
+    };
+}
+
+/** Lower-case and strip Vietnamese/diacritic marks so message search is accent-insensitive. */
+function foldText(value: string): string {
+    return value.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+}
+
+/** zca-js throws code -69 when the cloud service has nothing more to load: stop paging. */
+function isStopPagingError(e: unknown): boolean {
+    return typeof e === "object" && e !== null && "code" in e && (e as { code: unknown }).code === -69;
+}
+
+/**
+ * Fetch a group's messages from Zalo's cloud message service (getCloudMessage), paging from newest
+ * to older until `limit` messages are collected or the server has no more. Returns newest-first.
+ * Replaces the removed `/api/group/history` endpoint (zca-js getGroupChatHistory, now 404).
+ */
+async function fetchGroupHistory(
+    api: Pick<ToolsApi, "getCloudMessage">,
+    groupId: string,
+    limit: number,
+): Promise<{ messages: HistoryMessage[]; hasMore: boolean; cursor: string | null }> {
+    const messages: HistoryMessage[] = [];
+    let cursor: string | undefined;
+    let isOld = false;
+    let moreOnServer = false;
+    const maxPages = Math.ceil(limit / 50) + 1;
+
+    for (let page = 0; page < maxPages && messages.length < limit; page++) {
+        let res: Awaited<ReturnType<ToolsApi["getCloudMessage"]>>;
+        try {
+            res = await api.getCloudMessage(groupId, cursor, cursor ? { isOld } : undefined);
+        } catch (e) {
+            if (isStopPagingError(e)) break;
+            throw e;
+        }
+        const batch = res?.groupMsgs ?? [];
+        for (const m of batch) messages.push(toHistoryMessage(m));
+        moreOnServer = Boolean(res?.hasMore);
+        const next = res?.lastMsgId ?? null;
+        if (!moreOnServer) break; // server says no older messages
+        if (batch.length === 0 && (res?.isFiltered || next === (cursor ?? null))) break;
+        if (next === null || next === (cursor ?? null)) break; // cursor stopped moving
+        cursor = next;
+        isOld = Boolean(res?.isOld);
+    }
+
+    const truncated = messages.length > limit;
+    return { messages: messages.slice(0, limit), hasMore: moreOnServer || truncated, cursor: cursor ?? null };
+}
+
+/**
+ * Fetch DM history by paging the live listener's `old_messages` stream and filtering to one thread.
+ * zca-js 2.1.2 has no thread-scoped REST endpoint for DMs (only groups), so this is best-effort:
+ * the listener returns messages globally for the thread type, so low-traffic DMs may need more pages.
+ */
+async function fetchDmHistoryViaListener(
+    listener: HistoryListener,
+    threadId: string,
+    limit: number,
+    lastMsgId: string | null,
+): Promise<{ messages: HistoryMessage[]; cursor: string | null; hasMore: boolean }> {
+    const target = String(threadId);
+    const messages: HistoryMessage[] = [];
+    let cursor = lastMsgId;
+    let done = false;
+    const maxPages = Math.ceil(limit / 20);
+
+    for (let page = 0; !done && messages.length < limit && page < maxPages; page++) {
+        const pageMessages = await new Promise<Message[]>((resolve) => {
+            const handler = (received: Message[]) => {
+                clearTimeout(timer);
+                listener.removeListener("old_messages", handler);
+                resolve(received);
+            };
+            const timer = setTimeout(() => {
+                listener.removeListener("old_messages", handler);
+                resolve([]);
+            }, 10000);
+            listener.on("old_messages", handler);
+            listener.requestOldMessages(THREAD_USER, cursor);
+        });
+
+        if (!pageMessages || pageMessages.length === 0) {
+            done = true;
+            break;
+        }
+
+        for (const msg of pageMessages) {
+            if (messages.length >= limit) break;
+            const msgThread = String(msg.threadId || "");
+            const msgSender = String(msg.data?.uidFrom || "");
+            if (msgThread !== target && msgSender !== target) continue;
+            messages.push(toHistoryMessage(msg));
+        }
+
+        const lastMsg = pageMessages[pageMessages.length - 1];
+        const nextId = lastMsg?.data?.actionId || lastMsg?.data?.msgId;
+        if (!nextId || nextId === cursor) done = true;
+        cursor = nextId ?? null;
+    }
+
+    return { messages, cursor, hasMore: !done };
 }
 
 /**
@@ -542,10 +664,11 @@ export function registerTools(
         {
             title: "Get Zalo Message History",
             description:
-                "Fetch historical messages from a Zalo DM or group conversation (up to ~2 weeks). " +
-                "Unlike zalo_get_messages (which reads from the live buffer), this fetches older messages " +
-                "from the Zalo server. Use 'lastMsgId' cursor from previous response for pagination. " +
-                "WARNING: Large limits may consume significant memory/bandwidth. Start with a small limit and paginate. " +
+                "Fetch historical messages from a Zalo DM or group conversation. " +
+                "Unlike zalo_get_messages (which only reads the live buffer), this fetches older messages from the " +
+                "Zalo server. Groups use a direct thread-scoped call that reliably returns the latest `limit` " +
+                "messages (set a larger limit to go further back; `hasMore` signals older messages exist). " +
+                "DMs page the live listener and are best-effort. " +
                 'threadType: 0 or "dm" = DM, 1 or "group" = group.',
             inputSchema: z.object({
                 threadId: z.string().describe("Thread ID to fetch history from"),
@@ -560,60 +683,24 @@ export function registerTools(
         },
         async ({ threadId, threadType, limit, lastMsgId }) => {
             try {
-                // Capture once so handler add/remove always hit the same listener, even across a re-login
-                const listener = getApi().listener;
-                const allMessages: HistoryMessage[] = [];
-                let cursor = lastMsgId || null;
-                let done = false;
-                const maxPages = Math.ceil(limit / 20);
-                let page = 0;
+                const type = toThreadType(threadType);
+                let allMessages: HistoryMessage[];
+                let cursor: string | null;
+                let hasMore: boolean;
 
-                while (!done && allMessages.length < limit && page < maxPages) {
-                    page++;
-                    const pageMessages = await new Promise<Message[]>((resolve) => {
-                        const handler = (messages: Message[]) => {
-                            clearTimeout(timer);
-                            listener.removeListener("old_messages", handler);
-                            resolve(messages);
-                        };
-                        const timer = setTimeout(() => {
-                            listener.removeListener("old_messages", handler);
-                            resolve([]);
-                        }, 10000);
-
-                        listener.on("old_messages", handler);
-                        listener.requestOldMessages(toThreadType(threadType), cursor);
-                    });
-
-                    if (!pageMessages || pageMessages.length === 0) {
-                        done = true;
-                        break;
-                    }
-
-                    for (const msg of pageMessages) {
-                        if (allMessages.length >= limit) break;
-                        // API returns messages globally — filter to requested thread
-                        const msgThread = String(msg.threadId || "");
-                        const msgSender = String(msg.data?.uidFrom || "");
-                        const target = String(threadId);
-                        if (msgThread !== target && msgSender !== target) continue;
-                        const rawContent = msg.data?.content;
-                        const isText = typeof rawContent === "string";
-                        allMessages.push({
-                            msgId: msg.data?.msgId,
-                            threadId: msg.threadId,
-                            senderId: msg.data?.uidFrom || null,
-                            senderName: msg.data?.dName || null,
-                            text: isText ? rawContent : extractMessageText(rawContent, msg.data?.msgType),
-                            timestamp: msg.data?.ts ? Number(msg.data.ts) : null,
-                            type: isText ? "text" : msg.data?.msgType || "attachment",
-                        });
-                    }
-
-                    const lastMsg = pageMessages[pageMessages.length - 1];
-                    const nextId = lastMsg?.data?.actionId || lastMsg?.data?.msgId;
-                    if (!nextId || nextId === cursor) done = true;
-                    cursor = nextId;
+                if (type === THREAD_GROUP) {
+                    // Groups: Zalo's cloud message service (thread-scoped, paginated). Reliable even for
+                    // low-traffic groups, and needs no second listener (avoids the one-listener-per-account conflict).
+                    const res = await fetchGroupHistory(getApi(), threadId, limit);
+                    allMessages = res.messages;
+                    cursor = res.cursor;
+                    hasMore = res.hasMore;
+                } else {
+                    // DMs: capture the listener once so add/remove hit the same one across a re-login.
+                    const page = await fetchDmHistoryViaListener(getApi().listener, threadId, limit, lastMsgId ?? null);
+                    allMessages = page.messages;
+                    cursor = page.cursor;
+                    hasMore = page.hasMore;
                 }
 
                 // Sort oldest first
@@ -629,14 +716,92 @@ export function registerTools(
 
                 return ok({
                     threadId,
-                    threadType: toThreadType(threadType) === THREAD_USER ? "dm" : "group",
+                    threadType: type === THREAD_USER ? "dm" : "group",
                     count: allMessages.length,
                     messages: allMessages,
-                    cursor: cursor,
-                    hasMore: !done,
+                    cursor,
+                    hasMore,
                 });
             } catch (e) {
                 console.error("[mcp-tools] zalo_get_history error:", errorMessage(e));
+                return err(errorMessage(e));
+            }
+        },
+    );
+
+    // --- zalo_search_messages ---
+    server.registerTool(
+        "zalo_search_messages",
+        {
+            title: "Search Zalo Messages",
+            description:
+                "Search/query messages by keyword, sender, and time range. Looks in the live buffer and, for a " +
+                "group threadId, also fetches that group's history. Keyword match is case- and accent-insensitive " +
+                "(Vietnamese-aware). Omit `query` to filter purely by sender/time. " +
+                'threadType is only used when a group threadId is given (0 or "dm" = DM, 1 or "group" = group).',
+            inputSchema: z.object({
+                query: z.string().optional().describe("Keyword to match in message text (case/accent-insensitive)"),
+                threadId: z
+                    .string()
+                    .optional()
+                    .describe("Restrict to one thread. For groups, history is fetched; omit to search the buffer."),
+                threadType: THREAD_TYPE_SCHEMA,
+                senderId: z.string().optional().describe("Only messages sent by this user ID"),
+                from: z.number().int().min(0).optional().describe("Only messages at/after this Unix ms timestamp"),
+                to: z.number().int().min(0).optional().describe("Only messages at/before this Unix ms timestamp"),
+                limit: z.number().int().min(1).max(200).default(50).describe("Max results (newest first)"),
+            }),
+        },
+        async ({ query, threadId, threadType, senderId, from, to, limit }) => {
+            try {
+                const candidates: HistoryMessage[] = [];
+
+                // Group history (reliable, thread-scoped) when a group thread is targeted.
+                if (threadId && toThreadType(threadType) === THREAD_GROUP) {
+                    const res = await fetchGroupHistory(getApi(), threadId, limit);
+                    candidates.push(...res.messages);
+                }
+
+                // Live buffer (covers DMs and recent messages for everything).
+                for (const m of buffer.read(threadId, 0, Number.MAX_SAFE_INTEGER).messages) {
+                    candidates.push({
+                        msgId: m.id,
+                        threadId: m.threadId,
+                        senderId: m.senderId,
+                        senderName: m.senderName,
+                        text: m.text,
+                        timestamp: m.timestamp,
+                        type: m.type,
+                    });
+                }
+
+                const needle = query ? foldText(query) : null;
+                const seen = new Set<string>();
+                const matches = candidates
+                    .filter((m) => {
+                        if (m.msgId) {
+                            if (seen.has(m.msgId)) return false;
+                            seen.add(m.msgId);
+                        }
+                        if (needle && !foldText(m.text || "").includes(needle)) return false;
+                        if (senderId && m.senderId !== senderId) return false;
+                        if (from !== undefined && (m.timestamp ?? 0) < from) return false;
+                        if (to !== undefined && (m.timestamp ?? 0) > to) return false;
+                        return true;
+                    })
+                    .toSorted((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                    .slice(0, limit);
+
+                if (nameCache) {
+                    for (const m of matches) {
+                        const info = nameCache.get(m.threadId);
+                        if (info) m.threadName = info.name;
+                    }
+                }
+
+                return ok({ count: matches.length, messages: matches });
+            } catch (e) {
+                console.error("[mcp-tools] zalo_search_messages error:", errorMessage(e));
                 return err(errorMessage(e));
             }
         },

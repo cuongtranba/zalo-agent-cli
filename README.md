@@ -52,7 +52,8 @@ zalo-agent mcp start --http 3847 --auth <token> --host 0.0.0.0  # remote access 
 | `zalo_list_threads` | Buffered threads with unread counts |
 | `zalo_search_threads` | Find a DM or group by name (accent-insensitive) |
 | `zalo_list_conversations` | Recent DMs and groups from the account |
-| `zalo_get_history` | Older messages from the server (about 2 weeks) |
+| `zalo_get_history` | Older messages from the server (groups: reliable thread-scoped fetch; DMs: best-effort) |
+| `zalo_search_messages` | Query messages by keyword, sender and time range (buffer + group history) |
 | `zalo_send_message` | Send text; optional reply and @mentions |
 | `zalo_send_attachment` | Send files or images from paths or URLs (25 MB cap) |
 | `zalo_react` | React to a message |

@@ -118,8 +118,30 @@ export function registerGroupCommands(program: Command): void {
         .option("-n, --count <n>", "Number of messages to fetch", "20")
         .action(async (groupId: string, opts: { count: string }) => {
             try {
-                const result = await getApi().getGroupChatHistory(groupId, Number(opts.count));
-                const msgs = result?.groupMsgs || [];
+                const api = getApi();
+                const limit = Number(opts.count);
+                // Zalo removed /api/group/history; page the cloud message service instead.
+                const msgs: Awaited<ReturnType<typeof api.getCloudMessage>>["groupMsgs"] = [];
+                let cursor: string | undefined;
+                let isOld = false;
+                let moreOnServer = false;
+                const maxPages = Math.ceil(limit / 50) + 1;
+                for (let page = 0; page < maxPages && msgs.length < limit; page++) {
+                    let res: Awaited<ReturnType<typeof api.getCloudMessage>>;
+                    try {
+                        res = await api.getCloudMessage(groupId, cursor, cursor ? { isOld } : undefined);
+                    } catch (e) {
+                        if (typeof e === "object" && e !== null && "code" in e && e.code === -69) break;
+                        throw e;
+                    }
+                    for (const m of res?.groupMsgs ?? []) msgs.push(m);
+                    moreOnServer = Boolean(res?.hasMore);
+                    const next = res?.lastMsgId ?? null;
+                    if (!moreOnServer || next === null || next === (cursor ?? null)) break;
+                    cursor = next;
+                    isOld = Boolean(res?.isOld);
+                }
+                msgs.length = Math.min(msgs.length, limit);
 
                 // Normalize messages into clean, storage-friendly JSON
                 const normalized = msgs.map((m) => {
@@ -149,13 +171,13 @@ export function registerGroupCommands(program: Command): void {
                 const payload = {
                     groupId,
                     count: normalized.length,
-                    hasMore: result?.more === 1,
+                    hasMore: moreOnServer || msgs.length >= limit,
                     messages: normalized,
                 };
 
                 output(payload, program.opts().json, () => {
                     info(`${normalized.length} message(s) in group ${groupId}`);
-                    if (result?.more === 1) info("(more messages available)");
+                    if (payload.hasMore) info("(more messages available)");
                     console.log();
                     for (const m of normalized) {
                         const time = new Date(m.timestamp).toLocaleTimeString();
